@@ -1,0 +1,762 @@
+openapi: 3.1.0
+info:
+  title: VaaniVoice Public API
+  version: "1.0.0"
+  summary: AI voice agents and LiveKit meeting rooms — opened to the agentic ecosystem.
+  description: |
+    The VaaniVoice public API lets any application (or AI agent) mint short-TTL
+    WebSocket sessions for voice agents (textvoice / voicebot) and provision
+    LiveKit meeting rooms with or without the meeting-agent AI participant
+    "Vikash". Auth is a Bearer API key (`vv_live_...`) minted at
+    https://www.vaanilabs.in/api-keys.
+
+    Billing: per-minute for voice surfaces (env-driven sell-rate, matches the
+    PAYG dashboard rate); per-second for meeting surfaces (8 paise/sec for
+    meeting-agent, 1 paise/sec for plain meeting). A 100-paise reservation
+    floor is held at session-open and reconciled on close.
+
+    Source: https://github.com/vaanilabs/vaanivoice
+  contact:
+    name: VaaniVoice Support
+    url: https://www.vaanilabs.in/contact
+    email: hello@vaanilabs.in
+  license:
+    name: Proprietary
+    url: https://www.vaanilabs.in/terms
+servers:
+  - url: https://www.vaanilabs.in
+    description: Production
+security:
+  - bearerAuth: []
+tags:
+  - name: voice
+    description: Real-time WebSocket voice surfaces (textvoice / voicebot).
+  - name: meeting
+    description: LiveKit room provisioning, with or without Vikash.
+  - name: keys
+    description: Dashboard-only key management. Uses Supabase session cookie auth — NOT API key.
+  - name: usage
+    description: Per-key usage rollups. Dashboard-only auth.
+paths:
+  /api/public/v1/textvoice/session:
+    post:
+      tags: [voice]
+      summary: Mint a textvoice WebSocket session
+      description: |
+        Returns a short-TTL WebSocket URL pre-signed with the caller's
+        API-key context (`api_key_id`, `user_id`, `flow_id`, `usage_id`).
+        Connect with any standard WebSocket client; the token is embedded
+        in the URL as `?public_token=...`. Token TTL is 5 minutes.
+      operationId: createTextvoiceSession
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoiceSessionRequest"
+            example:
+              flow_id: "lead-qualification-v3"
+      responses:
+        "200":
+          description: Session minted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceSessionResponse"
+              example:
+                ws_url: "wss://textvoice.vaanilabs.in/browser-stream?public_token=eyJ...&flow_id=lead-qualification-v3"
+                ws_token: "eyJ...sig"
+                expires_at: 1735000000
+                surface: "textvoice"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/InsufficientBalance" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/public/v1/voicebot/session:
+    post:
+      tags: [voice]
+      summary: Mint a voicebot (embed-snippet) WebSocket session
+      description: |
+        Same backend as `textvoice`; marked `surface=voicebot` so dashboard
+        analytics split embed-snippet usage from raw textvoice usage. Use
+        this when the call originates from a website widget.
+      operationId: createVoicebotSession
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoiceSessionRequest"
+            example:
+              flow_id: "website-faq"
+      responses:
+        "200":
+          description: Session minted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceSessionResponse"
+              example:
+                ws_url: "wss://textvoice.vaanilabs.in/browser-stream?public_token=eyJ...&flow_id=website-faq"
+                ws_token: "eyJ...sig"
+                expires_at: 1735000000
+                surface: "voicebot"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/InsufficientBalance" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/public/v1/meeting-agent/rooms:
+    post:
+      tags: [meeting]
+      summary: Provision a LiveKit room with Vikash inside
+      description: |
+        Creates a LiveKit room AND dispatches Vikash (the AI meeting
+        participant) to join it. Returns `room_url` you can share with
+        humans. Billed at the meeting-agent rate (default 8 paise/sec).
+      operationId: createMeetingAgentRoom
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeetingAgentRoomRequest"
+            example:
+              title: "Sprint demo with notes-bot"
+              max_participants: 8
+              flow_id: "meeting-notes-v2"
+      responses:
+        "200":
+          description: Room provisioned and Vikash dispatched.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingRoomResponse"
+              example:
+                room_url: "https://vaanilabs.in/meet/abc-defgh-ijk"
+                room_name: "abc-defgh-ijk"
+                host_token: "eyJhbGciOi..."
+                session_token: "eyJ...sig"
+                expires_at: 1735000000
+                surface: "meeting-agent"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/InsufficientBalance" }
+        "403": { $ref: "#/components/responses/ForbiddenMeeting" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502": { $ref: "#/components/responses/BackendError" }
+
+  /api/public/v1/meeting/rooms:
+    post:
+      tags: [meeting]
+      summary: Provision a plain LiveKit room (no AI)
+      description: |
+        Same as `/meeting-agent/rooms` but skips the Vikash dispatch.
+        Cheaper (1 paise/sec). Use this for plain audio/video conferencing
+        where you don't want the AI participant.
+      operationId: createPlainMeetingRoom
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlainMeetingRoomRequest"
+            example:
+              title: "1:1 with Asha"
+              max_participants: 2
+      responses:
+        "200":
+          description: Room provisioned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeetingRoomResponse"
+              example:
+                room_url: "https://vaanilabs.in/meet/xyz-12345-abc"
+                room_name: "xyz-12345-abc"
+                host_token: "eyJhbGciOi..."
+                session_token: "eyJ...sig"
+                expires_at: 1735000000
+                surface: "meeting"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/InsufficientBalance" }
+        "403": { $ref: "#/components/responses/ForbiddenMeeting" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502": { $ref: "#/components/responses/BackendError" }
+
+  /api/api-keys:
+    get:
+      tags: [keys]
+      summary: List the caller's API keys (dashboard only)
+      description: |
+        Returns all keys owned by the current user. Plaintext is NEVER
+        returned after creation — only `key_prefix`. This endpoint uses
+        Supabase session-cookie auth, NOT a Bearer key, so it is invoked
+        from the dashboard (or a logged-in browser session) and not from
+        an external `vv_live_...` integration.
+      operationId: listApiKeys
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Caller's keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApiKey" }
+              example:
+                keys:
+                  - id: "8a4f2b3c-..."
+                    name: "Production"
+                    key_prefix: "abcdefgh"
+                    scopes: ["textvoice", "voicebot", "meeting-agent", "meeting"]
+                    rate_limit_per_min: 60
+                    enabled: true
+                    last_used_at: "2026-04-25T09:30:00Z"
+                    created_at: "2026-04-01T12:00:00Z"
+                    revoked_at: null
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    post:
+      tags: [keys]
+      summary: Mint a new API key (plaintext returned ONCE)
+      description: |
+        Returns the plaintext `secret` exactly once — store it now or you
+        will need to mint a new key. Only the sha256 hash is persisted
+        server-side.
+      operationId: createApiKey
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+            example:
+              name: "Production"
+              scopes: ["textvoice", "voicebot", "meeting-agent", "meeting"]
+              rate_limit_per_min: 60
+      responses:
+        "201":
+          description: Key created. `secret` is the plaintext — shown once.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateApiKeyResponse" }
+              example:
+                id: "8a4f2b3c-..."
+                name: "Production"
+                key_prefix: "abcdefgh"
+                scopes: ["textvoice", "voicebot", "meeting-agent", "meeting"]
+                rate_limit_per_min: 60
+                enabled: true
+                created_at: "2026-04-25T12:00:00Z"
+                secret: "vv_live_AbCdEfGh..."
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/api-keys/{id}:
+    delete:
+      tags: [keys]
+      summary: Revoke an API key (dashboard only)
+      operationId: revokeApiKey
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/KeyIdPath"
+      responses:
+        "200":
+          description: Revoked (or already revoked).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+                  already_revoked: { type: boolean }
+              example:
+                ok: true
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/api-keys/{id}/usage:
+    get:
+      tags: [usage]
+      summary: Per-key usage rollup (dashboard only)
+      description: |
+        Owner-scoped rollup of `api_usage` rows for a single key. `range`
+        accepts `1d` to `365d` (default `30d`). Totals are split by
+        surface; `recent` includes up to 1000 rows for inspection.
+      operationId: getApiKeyUsage
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/KeyIdPath"
+        - in: query
+          name: range
+          required: false
+          schema:
+            type: string
+            pattern: "^\\d{1,3}d$"
+            default: "30d"
+          description: "e.g. `30d`, `7d`, `365d`."
+      responses:
+        "200":
+          description: Usage rollup.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageRollupResponse" }
+              example:
+                key:
+                  id: "8a4f2b3c-..."
+                  name: "Production"
+                  key_prefix: "abcdefgh"
+                range_days: 30
+                totals:
+                  sessions: 42
+                  units: 318
+                  cost_paise: 12700
+                by_surface:
+                  textvoice: { sessions: 30, units: 250, cost_paise: 10000 }
+                  meeting-agent: { sessions: 12, units: 68, cost_paise: 2700 }
+                recent:
+                  - id: 1
+                    surface: "textvoice"
+                    units: 8
+                    cost_paise: 320
+                    started_at: "2026-04-24T08:00:00Z"
+                    ended_at: "2026-04-24T08:08:00Z"
+                    metadata: {}
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+webhooks:
+  event-delivery:
+    post:
+      summary: Outbound signed event delivery (VaaniVoice → your URL)
+      description: |
+        VaaniVoice POSTs an event envelope to the HTTPS URL you registered
+        (in the dashboard, via `POST /api/webhooks` under a session — NOT a
+        `vv_live_` key). Delivery is asynchronous (a scheduler drains the
+        queue ~once/minute), signed, and retried: exponential backoff up to
+        8 attempts (~256 min), each attempt timing out after 10s. Respond
+        `2xx` to acknowledge. After 5 consecutive failures the webhook is
+        auto-disabled and the owner is emailed.
+
+        Verify the `X-VaaniVoice-Signature` header — it is `sha256=` followed
+        by the lowercase hex HMAC-SHA256 of the exact raw body bytes, keyed
+        with the `vv_whk_...` secret shown once at registration. Compare in
+        constant time.
+      operationId: deliverWebhookEvent
+      parameters:
+        - in: header
+          name: X-VaaniVoice-Signature
+          required: true
+          schema:
+            type: string
+            pattern: "^sha256=[0-9a-f]{64}$"
+          description: "`sha256=<hex>` — HMAC-SHA256 of the raw body, keyed with your webhook secret."
+        - in: header
+          name: X-VaaniVoice-Event
+          required: true
+          schema:
+            type: string
+          description: The event type, e.g. `call.completed`.
+        - in: header
+          name: X-VaaniVoice-Delivery
+          required: true
+          schema:
+            type: string
+          description: Numeric delivery id — usable for de-duplication.
+        - in: header
+          name: User-Agent
+          required: false
+          schema:
+            type: string
+            enum: ["VaaniVoice-Webhooks/1.0"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookEnvelope" }
+            example:
+              id: "evt_9f1c2b3a-..."
+              type: "call.completed"
+              created: 1714003200
+              data: {}
+      responses:
+        "2XX":
+          description: Delivery acknowledged. Any 2xx counts as success.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: vv_live_
+      description: |
+        VaaniVoice public API key. Format: `vv_live_<32 chars>`. Mint at
+        https://www.vaanilabs.in/api-keys. Hashed server-side; plaintext
+        is never persisted after creation.
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sb-access-token
+      description: |
+        Supabase session cookie set by the VaaniVoice dashboard at login.
+        Used by `/api/api-keys/*` routes only.
+
+  parameters:
+    KeyIdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: API key UUID.
+
+  responses:
+    BadRequest:
+      description: Bad request (invalid JSON, bad UUID, bad scopes, etc.).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing / malformed / invalid / revoked credential.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: |
+        Key is valid but the request is not permitted. On the voice surfaces
+        this is either a scope denial
+        (`{ "error": "Key not authorized for surface '<surface>'" }`) or a
+        flow-ownership denial (`{ "error": "flow_not_found" }` when `flow_id`
+        is not owned-or-public — non-oracle).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ForbiddenMeeting:
+      description: |
+        Key is valid but the request is not permitted. In addition to the
+        scope and `flow_not_found` denials of the voice surfaces, the meeting
+        surfaces are feature-gated on `meeting_agent`: if that feature is
+        hidden for the key owner (role/user flags) or absent on this
+        deployment (e.g. staging), the response is
+        `{ "error": "feature_not_available", "message": "The '<surface>' surface is not enabled for this account." }`.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - { $ref: "#/components/schemas/Error" }
+              - { $ref: "#/components/schemas/FeatureNotAvailableError" }
+    NotFound:
+      description: Resource does not exist or is not owned by the caller.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InsufficientBalance:
+      description: Wallet empty AND no active autopay mandate.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/InsufficientBalanceError" }
+    RateLimited:
+      description: Per-key rate limit exceeded.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BackendError:
+      description: Upstream meeting-agent backend unreachable or refused.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable error string.
+
+    InsufficientBalanceError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: ["insufficient_balance"]
+        setup_url:
+          type: string
+          format: uri
+
+    FeatureNotAvailableError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: ["feature_not_available"]
+        message:
+          type: string
+          description: |
+            Human-readable detail, e.g. "The 'meeting-agent' surface is not
+            enabled for this account." Only the meeting surfaces are
+            feature-gated (on `meeting_agent`); the voice surfaces are
+            always-on.
+
+    WebhookEventType:
+      type: string
+      description: |
+        Catalog of event types an outbound webhook subscription may carry.
+        `low_balance.warned` is defined but NOT yet emitted (reserved).
+        `webhook.ping` is a test-only event sent by the dashboard "Test"
+        button — never persisted as a subscribable type, but receivers should
+        accept it.
+      enum:
+        - call.completed
+        - call.failed
+        - meeting.ended
+        - lead.created
+        - usage.charged
+        - low_balance.warned
+
+    WebhookEnvelope:
+      type: object
+      description: |
+        JSON body of every outbound webhook delivery. Signed with
+        HMAC-SHA256 over the exact raw bytes; the signature is delivered in
+        the `X-VaaniVoice-Signature: sha256=<hex>` header.
+      required: [id, type, created, data]
+      properties:
+        id:
+          type: string
+          description: Unique event id, prefixed `evt_`. Reused across retries — key idempotency on it.
+        type:
+          oneOf:
+            - { $ref: "#/components/schemas/WebhookEventType" }
+            - { type: string, enum: ["webhook.ping"] }
+        created:
+          type: integer
+          description: UNIX timestamp (seconds) when the event was created.
+        data:
+          type: object
+          additionalProperties: true
+          description: Event-specific payload. Phone numbers are masked. Defensive-parse — no sub-field is guaranteed.
+
+    VoiceSessionRequest:
+      type: object
+      properties:
+        flow_id:
+          type: string
+          maxLength: 128
+          description: |
+            Optional published-flow ID/slug. When omitted, the agent uses
+            the caller's default flow.
+
+            OWNERSHIP: the flow MUST be one you own OR a flow explicitly
+            marked public (a shared template). Any other value — another
+            tenant's private flow, or a non-existent id — returns
+            `403 { "error": "flow_not_found" }`. The response is a non-oracle
+            403: "no such flow" and "not yours" are intentionally
+            indistinguishable.
+
+    VoiceSessionResponse:
+      type: object
+      required: [ws_url, ws_token, expires_at, surface]
+      properties:
+        ws_url:
+          type: string
+          format: uri
+          description: WebSocket URL with `?public_token=...` already embedded.
+        ws_token:
+          type: string
+          description: Same token as `?public_token=` query — for clients that prefer header auth.
+        expires_at:
+          type: integer
+          description: UNIX timestamp (seconds). Token TTL is 5 minutes.
+        surface:
+          type: string
+          enum: [textvoice, voicebot]
+
+    MeetingAgentRoomRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 120
+          description: Room display title. Defaults to "Public API Meeting".
+        flow_id:
+          type: string
+          maxLength: 128
+          description: |
+            Optional flow for Vikash to follow. Same ownership rule as the
+            voice surfaces: must be owned-or-public, else `403 flow_not_found`
+            (non-oracle).
+        max_participants:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+
+    PlainMeetingRoomRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 120
+          description: Room display title. Defaults to "Public API Meeting".
+        flow_id:
+          type: string
+          maxLength: 128
+          description: |
+            Accepted for forward-compatibility and still ownership-checked
+            (a bad value returns `403 flow_not_found`), but NOT forwarded
+            downstream — a plain room has no agent to follow a flow.
+        max_participants:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+
+    MeetingRoomResponse:
+      type: object
+      required: [room_url, room_name, surface]
+      properties:
+        room_url:
+          type: string
+          format: uri
+        room_name:
+          type: string
+        host_token:
+          type: string
+          description: LiveKit JWT for host privileges.
+        session_token:
+          type: string
+        e2ee_key:
+          type: string
+          description: |
+            End-to-end encryption key for the room. Required to join the
+            encrypted room — distribute over a trusted channel only.
+        expires_at:
+          type: integer
+        surface:
+          type: string
+          enum: [meeting-agent, meeting]
+
+    ApiKey:
+      type: object
+      required: [id, name, key_prefix, scopes, rate_limit_per_min, enabled, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 80 }
+        key_prefix: { type: string, description: "First 8 chars of the random suffix; stable identifier." }
+        scopes:
+          type: array
+          items: { type: string, enum: [textvoice, voicebot, meeting-agent, meeting] }
+        rate_limit_per_min:
+          type: integer
+          minimum: 1
+          maximum: 600
+        enabled: { type: boolean }
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at: { type: string, format: date-time }
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateApiKeyRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 80 }
+        scopes:
+          type: array
+          items: { type: string, enum: [textvoice, voicebot, meeting-agent, meeting] }
+        rate_limit_per_min:
+          type: integer
+          minimum: 1
+          maximum: 600
+
+    CreateApiKeyResponse:
+      allOf:
+        - $ref: "#/components/schemas/ApiKey"
+        - type: object
+          required: [secret]
+          properties:
+            secret:
+              type: string
+              description: PLAINTEXT key. Shown only once. Store it now.
+
+    UsageRollupResponse:
+      type: object
+      required: [key, range_days, totals, by_surface, recent]
+      properties:
+        key:
+          type: object
+          required: [id, name, key_prefix]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            key_prefix: { type: string }
+        range_days: { type: integer }
+        totals:
+          $ref: "#/components/schemas/UsageBucket"
+        by_surface:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/UsageBucket"
+        recent:
+          type: array
+          items: { $ref: "#/components/schemas/UsageRow" }
+
+    UsageBucket:
+      type: object
+      required: [sessions, units, cost_paise]
+      properties:
+        sessions: { type: integer }
+        units: { type: integer, description: "Minutes for voice surfaces, sessions for meeting." }
+        cost_paise: { type: integer, description: "Indian paise (₹1 = 100 paise)." }
+
+    UsageRow:
+      type: object
+      required: [id, surface, units, cost_paise, started_at]
+      properties:
+        id: { type: integer }
+        surface:
+          type: string
+          enum: [textvoice, voicebot, meeting-agent, meeting]
+        units: { type: integer }
+        cost_paise: { type: integer }
+        started_at: { type: string, format: date-time }
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true

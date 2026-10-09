@@ -50,3 +50,5 @@ npm run lint
 
 ## Known gaps (Vaani Labs)
 The public docs, checked on 8 Oct 2026, confirm signed `call.completed` webhooks. They do **not** document mid-call custom HTTP tools, a list-calls endpoint, or the fields of `call.completed`, and phone numbers are masked. Until these are confirmed, the system runs the spec's fallback: no live tools, and a "needs scheduling" queue. See `lib/voice/vaani-adapter.ts`.
+
+**Update (9 Oct 2026):** the Vaani agent builder (Persona tab) has a section called "Actions: System & Custom Tools (Functions)". Mid-call custom tools are therefore likely supported. The exact request and response format still needs to be confirmed.

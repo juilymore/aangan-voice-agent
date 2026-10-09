@@ -62,13 +62,22 @@ describe("Vaani webhook signature (docs: sha256=<hex HMAC-SHA256 of raw body>)",
 });
 
 describe("mock providers", () => {
-  it("calendar refuses overlapping bookings", async () => {
+  it("shared calendar blocks a booked window for every designer", async () => {
     const cal = new MockCalendarProvider();
     const start = new Date("2026-10-09T05:30:00Z");
     const end = new Date("2026-10-09T06:00:00Z");
-    await cal.book({ designerCalendarId: "ruhi", start, end, title: "t", description: "d", callId: "c1" });
-    expect(await cal.isFree("ruhi", start, end)).toBe(false);
-    expect(await cal.isFree("jay", start, end)).toBe(true);
+    await cal.book({ start, end, title: "t", description: "d", callId: "c1" });
+    expect(await cal.isFree(start, end)).toBe(false);
+    expect(await cal.isFree(new Date("2026-10-09T05:45:00Z"), new Date("2026-10-09T06:15:00Z"))).toBe(false);
+    expect(await cal.isFree(end, new Date("2026-10-09T06:30:00Z"))).toBe(true);
+    const slots = await cal.getFreeSlots({
+      mode: "phone_call",
+      designers: [{ key: "ruhi", name: "Ruhi", maxPerDay: 4 }, { key: "jay", name: "Jay", maxPerDay: 4 }],
+      now: new Date("2026-10-08T05:30:00Z"),
+      limit: 4,
+    });
+    expect(new Set(slots.map((s) => s.start.toISOString())).size).toBe(slots.length);
+    expect(slots.some((s) => s.start.getTime() === start.getTime())).toBe(false);
   });
 
   it("email sends once per idempotency key", async () => {

@@ -77,7 +77,6 @@ CREATE TABLE "designers" (
 	"key" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"email" text NOT NULL,
-	"google_calendar_id" text,
 	"active" boolean DEFAULT true NOT NULL,
 	"max_per_day" integer DEFAULT 4 NOT NULL
 );
@@ -135,7 +134,7 @@ ALTER TABLE "call_audit" ADD CONSTRAINT "call_audit_call_id_calls_id_fk" FOREIGN
 ALTER TABLE "calls" ADD CONSTRAINT "calls_assigned_designer_designers_key_fk" FOREIGN KEY ("assigned_designer") REFERENCES "public"."designers"("key") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_call_id_calls_id_fk" FOREIGN KEY ("call_id") REFERENCES "public"."calls"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_designer_key_designers_key_fk" FOREIGN KEY ("designer_key") REFERENCES "public"."designers"("key") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "bookings_designer_start_confirmed_uq" ON "bookings" USING btree ("designer","start_at") WHERE "bookings"."status" = 'confirmed';--> statement-breakpoint
+CREATE UNIQUE INDEX "bookings_start_confirmed_uq" ON "bookings" USING btree ("start_at") WHERE "bookings"."status" = 'confirmed';--> statement-breakpoint
 CREATE INDEX "bookings_vaani_call_idx" ON "bookings" USING btree ("vaani_call_id");--> statement-breakpoint
 CREATE INDEX "calls_caller_number_idx" ON "calls" USING btree ("caller_number");--> statement-breakpoint
 CREATE INDEX "calls_started_at_idx" ON "calls" USING btree ("started_at");--> statement-breakpoint

@@ -49,7 +49,6 @@ export const designers = pgTable("designers", {
   key: text("key").primaryKey(), // "ruhi", "jay"
   name: text("name").notNull(),
   email: text("email").notNull(),
-  googleCalendarId: text("google_calendar_id"),
   active: boolean("active").notNull().default(true),
   maxPerDay: integer("max_per_day").notNull().default(4),
 });
@@ -142,10 +141,10 @@ export const bookings = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [
-    // Prevents double booking (build_spec.md §5)
-    uniqueIndex("bookings_designer_start_confirmed_uq")
-      .on(t.designer, t.startAt)
-      .where(sql`${t.status} = 'confirmed'`),
+    // One shared studio calendar: no two confirmed bookings may overlap, whichever designer they belong to.
+    // Enforced by the exclusion constraint `bookings_no_overlap` in db/migrations/0001_bookings_no_overlap.sql
+    // (drizzle can't express EXCLUDE constraints). This index makes the same start time fail fast too.
+    uniqueIndex("bookings_start_confirmed_uq").on(t.startAt).where(sql`${t.status} = 'confirmed'`),
     index("bookings_vaani_call_idx").on(t.vaaniCallId),
   ],
 );

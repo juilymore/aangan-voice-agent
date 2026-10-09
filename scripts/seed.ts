@@ -19,14 +19,14 @@ async function main() {
   const db = drizzle({ client: pool, schema });
 
   const designers = [
-    { key: "ruhi", name: "Ruhi", email: need("SEED_RUHI_EMAIL"), googleCalendarId: process.env.SEED_RUHI_CALENDAR_ID ?? null },
-    { key: "jay", name: "Jay", email: need("SEED_JAY_EMAIL"), googleCalendarId: process.env.SEED_JAY_CALENDAR_ID ?? null },
+    { key: "ruhi", name: "Ruhi", email: need("SEED_RUHI_EMAIL") },
+    { key: "jay", name: "Jay", email: need("SEED_JAY_EMAIL") },
   ];
   for (const d of designers) {
     await db
       .insert(schema.designers)
       .values(d)
-      .onConflictDoUpdate({ target: schema.designers.key, set: { name: d.name, email: d.email, googleCalendarId: d.googleCalendarId } });
+      .onConflictDoUpdate({ target: schema.designers.key, set: { name: d.name, email: d.email } });
   }
 
   const users = [

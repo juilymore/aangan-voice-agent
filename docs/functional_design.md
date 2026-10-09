@@ -377,6 +377,7 @@ Scored by code from signals that can be read directly from the transcript. Frust
 
 - **Who:** Ruhi and Jay (Q9). A designer marked inactive (on leave) gets no slots and no new assignments.
 - **Mode:** site visit (90 minutes, plus a 30-minute travel buffer) or phone call (30 minutes). The agent offers a site visit by default for full homes and offices. Callers in T05, T12, W01 and W06 asked for one.
+- **One shared studio calendar** (decision 9 Oct 2026). A booked window blocks everyone, whichever designer it is assigned to. Each offered slot is assigned at random to a designer under their daily cap.
 - **Availability:** Mon–Sat, 10:00–19:00 IST. The earliest slot is 12 hours from now; the horizon is 10 days. Starts on :00 and :30. Each designer has a daily cap.
 - **Offer:** up to 3 options are spoken at a time, the earliest first, balanced across designers. The caller can ask for a different day or "after 6pm / weekends" (W01). If nothing fits, the agent takes the caller's preferred times and the lead goes to a **"needs scheduling"** queue.
 - **Safety:** one slot can hold only one booking. The slot is re-checked against the live calendar before the event is created. If it was just taken, the agent offers the next alternatives.

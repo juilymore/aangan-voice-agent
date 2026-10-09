@@ -26,6 +26,7 @@ const schema = z.object({
 
   // Google Calendar (service account JSON, base64)
   GOOGLE_SERVICE_ACCOUNT_B64: z.string().optional(),
+  GOOGLE_CALENDAR_ID: z.string().optional(), // the ONE shared studio calendar
 
   // Gemini
   GEMINI_API_KEY: z.string().optional(),
@@ -36,7 +37,7 @@ const schema = z.object({
   EMAIL_FROM: z.string().default("Aangan Assistant <onboarding@resend.dev>"),
   EMAIL_TEST_MODE: bool,
   EMAIL_TEST_TO: z.string().email().optional(),
-  ESCALATION_EMAIL: z.string().email().optional(),
+  ESCALATION_EMAIL: z.string().email().optional(), // falls back to OWNER_EMAIL
   OWNER_EMAIL: z.string().email().optional(),
 
   // HubSpot

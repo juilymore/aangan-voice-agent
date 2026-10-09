@@ -1,5 +1,5 @@
 {
-  "id": "ab62a0d5-fcbc-43ee-b61a-5203acfebc4d",
+  "id": "3eb354cb-dcf1-484c-8ce8-05b39cf38b61",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -93,15 +93,9 @@
         }
       },
       "indexes": {
-        "bookings_designer_start_confirmed_uq": {
-          "name": "bookings_designer_start_confirmed_uq",
+        "bookings_start_confirmed_uq": {
+          "name": "bookings_start_confirmed_uq",
           "columns": [
-            {
-              "expression": "designer",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
             {
               "expression": "start_at",
               "isExpression": false,
@@ -560,12 +554,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "google_calendar_id": {
-          "name": "google_calendar_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "active": {
           "name": "active",

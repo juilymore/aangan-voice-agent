@@ -5,7 +5,6 @@ CREATE TYPE "public"."outcome_stage" AS ENUM('none', 'consultation_done', 'no_sh
 CREATE TYPE "public"."qualification" AS ENUM('qualified', 'not_qualified', 'needs_review', 'not_a_lead');--> statement-breakpoint
 CREATE TYPE "public"."sync_status" AS ENUM('pending', 'ok', 'failed', 'dead');--> statement-breakpoint
 CREATE TYPE "public"."temperature" AS ENUM('hot', 'warm', 'cold');--> statement-breakpoint
-CREATE TYPE "public"."user_role" AS ENUM('designer', 'owner');--> statement-breakpoint
 CREATE TABLE "bookings" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"vaani_call_id" text NOT NULL,
@@ -118,22 +117,10 @@ CREATE TABLE "tool_calls" (
 	"at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "users" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"email" text NOT NULL,
-	"name" text NOT NULL,
-	"role" "user_role" NOT NULL,
-	"designer_key" text,
-	"password_hash" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "users_email_unique" UNIQUE("email")
-);
---> statement-breakpoint
 ALTER TABLE "bookings" ADD CONSTRAINT "bookings_designer_designers_key_fk" FOREIGN KEY ("designer") REFERENCES "public"."designers"("key") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "call_audit" ADD CONSTRAINT "call_audit_call_id_calls_id_fk" FOREIGN KEY ("call_id") REFERENCES "public"."calls"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calls" ADD CONSTRAINT "calls_assigned_designer_designers_key_fk" FOREIGN KEY ("assigned_designer") REFERENCES "public"."designers"("key") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_call_id_calls_id_fk" FOREIGN KEY ("call_id") REFERENCES "public"."calls"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_designer_key_designers_key_fk" FOREIGN KEY ("designer_key") REFERENCES "public"."designers"("key") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "bookings_start_confirmed_uq" ON "bookings" USING btree ("start_at") WHERE "bookings"."status" = 'confirmed';--> statement-breakpoint
 CREATE INDEX "bookings_vaani_call_idx" ON "bookings" USING btree ("vaani_call_id");--> statement-breakpoint
 CREATE INDEX "calls_caller_number_idx" ON "calls" USING btree ("caller_number");--> statement-breakpoint

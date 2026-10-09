@@ -9,7 +9,6 @@ const bool = z
 
 const schema = z.object({
   DATABASE_URL: z.string().url(),
-  SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters"),
   APP_URL: z.string().url().default("http://localhost:3000"),
 
   // Mock switches: every external service defaults to mock (build_spec.md §12)

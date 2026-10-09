@@ -16,7 +16,7 @@ An AI phone assistant for Aangan Studio, Pune. It answers every enquiry call at 
 - Next.js 16 (App Router, TypeScript)
 - Neon Postgres + Drizzle
 - zod for validation
-- Our own login: bcrypt plus a signed cookie, for 3 users
+- No logins (submission project): a "Viewing as" dropdown switches between Nikhil, Ruhi and Jay
 - Vercel for hosting
 - An external scheduler that calls `/api/cron/*` with `CRON_SECRET`
 
@@ -25,9 +25,9 @@ Every external service has a mock (`MOCK_*=true`). These are the defaults, and t
 ## Local setup
 ```bash
 npm install
-cp .env.example .env.local      # then fill in DATABASE_URL, SESSION_SECRET, SEED_*
+cp .env.example .env.local      # then fill in DATABASE_URL
 npm run db:migrate              # creates the tables on Neon
-npm run db:seed                 # creates Ruhi, Jay, Nikhil
+npm run db:seed                 # adds the designers Ruhi and Jay
 npm run dev                     # http://localhost:3000
 ```
 
@@ -39,7 +39,7 @@ npm run lint
 ```
 
 ## Checkpoints
-1. **Foundation**: schema, login, provider interfaces and mocks, Vercel deploy ← *current*
+1. **Foundation**: schema, persona switcher, provider interfaces and mocks, Vercel deploy ← *current*
 2. Rules engine plus the test table
 3. Post-call pipeline (mock mode) plus fixtures
 4. Dashboard

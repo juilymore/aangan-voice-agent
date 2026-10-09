@@ -1,26 +1,23 @@
-// Seeds designers and the three dashboard users. Idempotent: safe to re-run.
-// Usage: npm run db:seed   (reads SEED_* variables from .env.local)
+// Seeds the two designers. Idempotent: safe to re-run.
+// Usage: npm run db:seed   (reads .env.local)
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-import bcrypt from "bcryptjs";
 import { Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import * as schema from "../db/schema";
 
-function need(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing ${name} in .env.local`);
-  return v;
-}
-
 async function main() {
-  const pool = new Pool({ connectionString: need("DATABASE_URL") });
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("Missing DATABASE_URL in .env.local");
+  const pool = new Pool({ connectionString: url });
   const db = drizzle({ client: pool, schema });
 
+  // Designer emails are where lead emails go. While EMAIL_TEST_MODE=true every email is redirected
+  // to EMAIL_TEST_TO anyway, so placeholders are fine for the project.
   const designers = [
-    { key: "ruhi", name: "Ruhi", email: need("SEED_RUHI_EMAIL") },
-    { key: "jay", name: "Jay", email: need("SEED_JAY_EMAIL") },
+    { key: "ruhi", name: "Ruhi", email: process.env.RUHI_EMAIL || "ruhi@aangan.example" },
+    { key: "jay", name: "Jay", email: process.env.JAY_EMAIL || "jay@aangan.example" },
   ];
   for (const d of designers) {
     await db
@@ -29,20 +26,7 @@ async function main() {
       .onConflictDoUpdate({ target: schema.designers.key, set: { name: d.name, email: d.email } });
   }
 
-  const users = [
-    { email: need("SEED_RUHI_EMAIL"), name: "Ruhi", role: "designer" as const, designerKey: "ruhi", pw: need("SEED_RUHI_PASSWORD") },
-    { email: need("SEED_JAY_EMAIL"), name: "Jay", role: "designer" as const, designerKey: "jay", pw: need("SEED_JAY_PASSWORD") },
-    { email: need("SEED_OWNER_EMAIL"), name: "Nikhil", role: "owner" as const, designerKey: null, pw: need("SEED_OWNER_PASSWORD") },
-  ];
-  for (const u of users) {
-    const passwordHash = await bcrypt.hash(u.pw, 10);
-    await db
-      .insert(schema.users)
-      .values({ email: u.email.toLowerCase(), name: u.name, role: u.role, designerKey: u.designerKey, passwordHash })
-      .onConflictDoUpdate({ target: schema.users.email, set: { name: u.name, role: u.role, designerKey: u.designerKey, passwordHash } });
-  }
-
-  console.log(`Seeded ${designers.length} designers and ${users.length} users.`);
+  console.log(`Seeded ${designers.length} designers.`);
   await pool.end();
 }
 

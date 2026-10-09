@@ -39,7 +39,6 @@ export const outcomeStage = pgEnum("outcome_stage", [
 export const bookingMode = pgEnum("booking_mode", ["site_visit", "phone_call"]);
 export const bookingStatus = pgEnum("booking_status", ["confirmed", "cancelled", "rescheduled"]);
 export const syncStatus = pgEnum("sync_status", ["pending", "ok", "failed", "dead"]);
-export const userRole = pgEnum("user_role", ["designer", "owner"]);
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -51,17 +50,6 @@ export const designers = pgTable("designers", {
   email: text("email").notNull(),
   active: boolean("active").notNull().default(true),
   maxPerDay: integer("max_per_day").notNull().default(4),
-});
-
-// Dashboard login (Neon has no built-in auth): three users, bcrypt hashes.
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  email: text("email").notNull().unique(),
-  name: text("name").notNull(),
-  role: userRole("role").notNull(),
-  designerKey: text("designer_key").references(() => designers.key),
-  passwordHash: text("password_hash").notNull(),
-  createdAt: ts("created_at").notNull().defaultNow(),
 });
 
 export const calls = pgTable(
@@ -207,4 +195,3 @@ export const syncJobs = pgTable("sync_jobs", {
 export type Call = typeof calls.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type Designer = typeof designers.$inferSelect;
-export type User = typeof users.$inferSelect;

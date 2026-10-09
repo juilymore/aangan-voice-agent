@@ -1,6 +1,6 @@
 {
-  "id": "df17a03b-a453-421b-83f2-50dbd8390cb3",
-  "prevId": "3eb354cb-dcf1-484c-8ce8-05b39cf38b61",
+  "id": "dce5ba5a-d752-4ed1-a076-28a820c9989a",
+  "prevId": "4594ff27-d517-4762-97b2-8d2265976a2b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -849,86 +849,6 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
-    },
-    "public.users": {
-      "name": "users",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "role": {
-          "name": "role",
-          "type": "user_role",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "designer_key": {
-          "name": "designer_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "password_hash": {
-          "name": "password_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "users_designer_key_designers_key_fk": {
-          "name": "users_designer_key_designers_key_fk",
-          "tableFrom": "users",
-          "columnsFrom": [
-            "designer_key"
-          ],
-          "tableTo": "designers",
-          "columnsTo": [
-            "key"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "users_email_unique": {
-          "name": "users_email_unique",
-          "columns": [
-            "email"
-          ],
-          "nullsNotDistinct": false
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -1000,14 +920,6 @@
         "hot",
         "warm",
         "cold"
-      ]
-    },
-    "public.user_role": {
-      "name": "user_role",
-      "schema": "public",
-      "values": [
-        "designer",
-        "owner"
       ]
     }
   },

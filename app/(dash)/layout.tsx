@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { requireSession } from "@/lib/auth/session";
-import { logout } from "@/app/login/actions";
+import { TEAM } from "@/config/team";
+import { currentPersona } from "@/lib/persona";
+import { PersonaSwitcher } from "./persona-switcher";
 
 export default async function DashLayout({ children }: { children: React.ReactNode }) {
-  const session = await requireSession();
+  const persona = await currentPersona();
   return (
     <div className="min-h-screen">
       <header className="border-b border-stone-200 bg-white">
@@ -11,13 +12,11 @@ export default async function DashLayout({ children }: { children: React.ReactNo
           <span className="font-semibold text-stone-900">Aangan Leads</span>
           <Link href="/" className="text-stone-700 hover:text-stone-900">Today</Link>
           <Link href="/calls" className="text-stone-700 hover:text-stone-900">Calls</Link>
-          {session.role === "owner" && (
+          {persona.role === "owner" && (
             <Link href="/metrics" className="text-stone-700 hover:text-stone-900">Metrics</Link>
           )}
-          <span className="ml-auto text-stone-500">{session.name}</span>
-          <form action={logout}>
-            <button className="text-stone-500 underline hover:text-stone-900">Sign out</button>
-          </form>
+          <span className="ml-auto font-medium text-stone-900">{persona.name}</span>
+          <PersonaSwitcher team={TEAM} current={persona.key} />
         </nav>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>

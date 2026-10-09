@@ -1,26 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { safeNext, signSession, verifySession } from "@/lib/auth/token";
+import { DEFAULT_PERSONA, TEAM, findPersona } from "@/config/team";
 import { VaaniAdapter, vaaniSignature, verifyVaaniSignature } from "@/lib/voice/vaani-adapter";
 import { MockCalendarProvider } from "@/lib/calendar/mock";
 import { MockEmailProvider } from "@/lib/email/types";
 
-const SECRET = "x".repeat(40);
-
-describe("session token", () => {
-  it("round-trips and rejects tampering or a wrong secret", async () => {
-    const t = await signSession({ uid: "u1", email: "a@b.co", name: "A", role: "owner", designerKey: null }, SECRET);
-    expect((await verifySession(t, SECRET))?.role).toBe("owner");
-    expect(await verifySession(t, "y".repeat(40))).toBeNull();
-    expect(await verifySession(t.slice(0, -2) + "aa", SECRET)).toBeNull();
-    expect(await verifySession(undefined, SECRET)).toBeNull();
+describe("persona switcher", () => {
+  it("resolves known personas and falls back to Nikhil for anything else", () => {
+    expect(findPersona("ruhi").role).toBe("designer");
+    expect(findPersona("nikhil").role).toBe("owner");
+    expect(findPersona("someone-else")).toBe(DEFAULT_PERSONA);
+    expect(findPersona(undefined)).toBe(DEFAULT_PERSONA);
+    expect(DEFAULT_PERSONA.name).toBe("Nikhil");
   });
 
-  it("only allows same-site relative redirects", () => {
-    expect(safeNext("/calls/123")).toBe("/calls/123");
-    expect(safeNext("//evil.com")).toBe("/");
-    expect(safeNext("https://evil.com")).toBe("/");
-    expect(safeNext("/\\evil.com")).toBe("/");
-    expect(safeNext(null)).toBe("/");
+  it("has exactly one owner and links every designer to a designer key", () => {
+    expect(TEAM.filter((p) => p.role === "owner")).toHaveLength(1);
+    for (const p of TEAM.filter((p) => p.role === "designer")) expect(p.designerKey).toBe(p.key);
   });
 });
 

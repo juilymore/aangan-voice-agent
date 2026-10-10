@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { TEAM, type Persona } from "@/config/team";
@@ -236,7 +237,7 @@ export async function getToday(scope: Scope, now: Date) {
 
 // ---------------------------------------------------------------- call detail
 
-export async function getCallDetail(id: string) {
+export const getCallDetail = cache(async (id: string) => {
   if (!UUID_RE.test(id)) return null;
   const [call] = await db().select().from(calls).where(eq(calls.id, id)).limit(1);
   if (!call) return null;
@@ -269,4 +270,4 @@ export async function getCallDetail(id: string) {
   ]);
 
   return { call, linked, bookings: callBookings, audit, jobs };
-}
+});

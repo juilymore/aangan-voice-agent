@@ -33,3 +33,7 @@ export const BASELINE_NOTE = "Before: about 48% of enquiries had no response wit
 
 /** Follow-ups older than this are "overdue". */
 export const FOLLOWUP_OVERDUE_HOURS = 24;
+
+/** Footnote under the cost panel. */
+export const COST_NOTE =
+  "Voice is billed on call minutes at Vaani's estimated rate; AI is a rough per-call estimate. Hosting and the phone number rental are not included. Rates live in lib/data/metrics-config.ts.";

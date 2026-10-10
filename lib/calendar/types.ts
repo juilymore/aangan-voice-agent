@@ -1,4 +1,4 @@
-// CalendarProvider — build_spec.md §7, simplified (decision 9 Oct 2026):
+// CalendarProvider — build_spec §7, simplified (decision 9 Oct 2026):
 // ONE shared studio calendar for both designers. A booked window blocks everyone;
 // the designer is assigned by us (random among active designers under their daily cap).
 // Google Calendar is the primary implementation; Cal.com or the mock can sit behind the same interface.
@@ -6,13 +6,13 @@
 export type ConsultMode = "site_visit" | "phone_call";
 
 export type Slot = {
-  slotId: string; // opaque, encodes designer + start + mode
+  slotId: string; // "designerKey|startISO|mode"
   designer: string; // designer key, assigned when the slot is offered
   designerName: string;
   start: Date;
   end: Date; // includes travel buffer for site visits
   mode: ConsultMode;
-  spoken: string; // e.g. "Thursday the ninth, at eleven in the morning" (IST)
+  spoken: string; // e.g. "Ruhi, Thursday the ninth, at eleven in the morning" (IST)
 };
 
 export type SlotQuery = {
@@ -20,6 +20,11 @@ export type SlotQuery = {
   designers: { key: string; name: string; maxPerDay: number }[];
   now: Date;
   limit: number;
+  /** Confirmed consultations per designer per IST day ("YYYY-M-D"), from our bookings table. */
+  load?: Record<string, Record<string, number>>;
+  /** Our own confirmed bookings, also treated as busy (in case the calendar event is missing). */
+  extraBusy?: { start: Date; end: Date }[];
+  preference?: { days?: number[]; partOfDay?: "morning" | "afternoon" | "evening" };
 };
 
 export type BookRequest = {

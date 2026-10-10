@@ -100,6 +100,8 @@ export const SYNC_KIND_LABELS: Record<string, string> = {
   designer_email: "Designer email",
   escalation_email: "Escalation email",
   hubspot_upsert: "HubSpot deal",
+  hubspot_sync: "HubSpot deal",
+  price_leak_alert: "Price-leak alert to Nikhil",
   calendar_update: "Calendar update",
 };
 

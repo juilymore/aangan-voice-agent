@@ -16,7 +16,8 @@ import {
 
 export const callType = pgEnum("call_type", [
   "new_enquiry",
-  "existing_client_issue",
+  "existing_client_issue", // complaint / escalation
+  "followup_update", // existing client asking for an update on their project
   "reschedule_request",
   "vendor_other",
   "wrong_number",
@@ -192,6 +193,46 @@ export const syncJobs = pgTable("sync_jobs", {
   createdAt: ts("created_at").notNull().defaultNow(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
+
+// Editable lead rubric and business assumptions (Rubric tab). Missing keys fall back to config/rules.ts.
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(), // "rules" | "rubric_text" | "business"
+  value: jsonb("value").notNull(),
+  updatedBy: text("updated_by"),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
+
+export const settingsAudit = pgTable("settings_audit", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  key: text("key").notNull(),
+  actor: text("actor").notNull(),
+  at: ts("at").notNull().defaultNow(),
+  oldValue: jsonb("old_value"),
+  newValue: jsonb("new_value"),
+  reason: text("reason"),
+});
+
+// "Teach the AI": a designer marks the system's verdict, temperature or a fact as wrong.
+export const aiCorrections = pgTable(
+  "ai_corrections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    callId: uuid("call_id").references(() => calls.id, { onDelete: "set null" }),
+    kind: text("kind").notNull(), // "qualification" | "temperature" | "fact"
+    field: text("field").notNull(), // e.g. qualification, temperature, locality
+    aiValue: jsonb("ai_value"),
+    humanValue: jsonb("human_value"),
+    reason: text("reason"),
+    context: jsonb("context"), // snapshot: quote, decidedBy, locality… used for suggestions and prompt hints
+    suggestion: jsonb("suggestion"), // proposed rubric change, if any
+    status: text("status").notNull().default("open"), // open | applied | dismissed
+    createdBy: text("created_by").notNull(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    resolvedBy: text("resolved_by"),
+    resolvedAt: ts("resolved_at"),
+  },
+  (t) => [index("ai_corrections_status_idx").on(t.status)],
+);
 
 export type Call = typeof calls.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;

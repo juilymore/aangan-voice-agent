@@ -3,6 +3,7 @@
 import type { TranscriptTurn } from "@/db/schema";
 import type { LlmProvider } from "@/lib/ai/types";
 import { evaluate } from "@/lib/rules/engine";
+import { DEFAULT_BUSINESS, type BusinessSettings, type RuleSettings } from "@/lib/rules/settings-schema";
 import type { Evaluation } from "@/lib/rules/types";
 import type { ComplianceFlag, DesignerBrief, ExtractedCall, QualificationReasons } from "@/lib/types/call-json";
 import { buildBrief, buildSummary } from "./brief";
@@ -20,6 +21,10 @@ export type AnalyzeInput = {
   meeting: DesignerBrief["meeting"];
   checkDisclosure?: boolean;
   extraFlags?: string[]; // e.g. repeat_caller, from linking
+  ruleSettings?: RuleSettings;
+  business?: Pick<BusinessSettings, "officeStartHour" | "officeEndHour" | "officeDays">;
+  /** Recent corrections from designers, fed to the extraction prompt ("teach the AI"). */
+  hints?: string[];
 };
 
 export type Analysis = {
@@ -47,7 +52,7 @@ export async function analyzeCall(input: AnalyzeInput, llm: LlmProvider): Promis
   const flags = [...(input.extraFlags ?? [])];
   let extracted: ExtractedCall = { fields: {}, unsupported: [] };
   if (!incomplete) {
-    const r = await extractFacts(llm, redactTranscript(input.transcript), IST_DATE(input.startedAt));
+    const r = await extractFacts(llm, redactTranscript(input.transcript), IST_DATE(input.startedAt), input.hints ?? []);
     if (r.ok) extracted = r.extracted;
     else flags.push("extraction_failed");
   }
@@ -58,7 +63,8 @@ export async function analyzeCall(input: AnalyzeInput, llm: LlmProvider): Promis
     bookedOnCall: input.bookingSucceeded,
     incomplete,
   });
-  let evaluation = evaluate(ruleInput);
+  let evaluation = evaluate(ruleInput, input.ruleSettings);
+  if (isAfterHours(input.startedAt, input.business ?? DEFAULT_BUSINESS)) flags.push("after_hours");
   if (flags.includes("extraction_failed") && evaluation.outcome !== "not_a_lead") {
     evaluation = { ...evaluation, outcome: "needs_review", decidedBy: "extraction_failed" };
   }
@@ -96,6 +102,7 @@ export async function analyzeCall(input: AnalyzeInput, llm: LlmProvider): Promis
 /** build_spec §8.10: prefers_human, incomplete, needs_review, qualified-not-booked, reschedule, conflict. */
 function followUpReason(e: Evaluation, flags: string[], booked: boolean, reschedule: boolean): string | null {
   if (e.decidedBy === "existing_client_issue") return "existing_client_issue";
+  if (e.decidedBy === "followup_update") return "client_update_request";
   if (e.decidedBy === "incomplete") return "incomplete";
   if (reschedule || e.decidedBy === "reschedule_request") return "reschedule_request";
   if (flags.includes("prefers_human")) return "prefers_human";
@@ -104,4 +111,11 @@ function followUpReason(e: Evaluation, flags: string[], booked: boolean, resched
   if (e.outcome === "qualified" && !booked) return "qualified_not_booked";
   if (e.outcome === "not_qualified" && e.decidedBy === "timeline") return "later_start_offered";
   return null;
+}
+
+/** Outside office hours (IST), per the business settings. */
+export function isAfterHours(d: Date, b: Pick<BusinessSettings, "officeStartHour" | "officeEndHour" | "officeDays">): boolean {
+  const t = new Date(d.getTime() + 330 * 60_000);
+  const h = t.getUTCHours() + t.getUTCMinutes() / 60;
+  return !b.officeDays.includes(t.getUTCDay()) || h < b.officeStartHour || h >= b.officeEndHour;
 }

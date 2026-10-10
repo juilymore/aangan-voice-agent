@@ -6,6 +6,8 @@ import { enqueue, runDueJobs } from "@/lib/sync/jobs";
 import type { NormalizedCall } from "@/lib/voice/types";
 import type { DesignerBrief } from "@/lib/types/call-json";
 import { analyzeCall } from "./analyze";
+import { getBusinessSettings, getRuleSettings } from "@/lib/rules/settings";
+import { extractionHints } from "@/lib/learning";
 
 // Post-call pipeline — build_spec §8: receive → (reconcile) → link → redact/extract → decide →
 // compliance → brief → assign → route. Idempotent on vaani_call_id.
@@ -167,12 +169,20 @@ export async function processCall(nc: NormalizedCall, opts: ProcessOptions = {})
       meeting,
       checkDisclosure: opts.checkDisclosure,
       extraFlags,
+      ruleSettings: await getRuleSettings(),
+      business: await getBusinessSettings(),
+      hints: await extractionHints(),
     },
     d.llm,
   );
 
   // 9. Assign: booked designer; otherwise the active designer with fewer open qualified leads (random on a tie).
   let assigned = booking?.designer ?? call.assignedDesigner ?? null;
+  // Existing clients: route to the designer they named, if we recognise the name.
+  if (!assigned && (a.callType === "followup_update" || a.callType === "existing_client_issue")) {
+    const said = String(a.extracted.fields.existing_client_details?.value ?? "").toLowerCase();
+    assigned = designers.find((x) => said.includes(x.name.toLowerCase()))?.key ?? null;
+  }
   if (!assigned && a.evaluation.outcome === "qualified" && designers.length) {
     const open = await conn
       .select({ d: schema.calls.assignedDesigner, n: sql<number>`count(*)::int` })
@@ -218,6 +228,9 @@ export async function processCall(nc: NormalizedCall, opts: ProcessOptions = {})
   }
   if (a.evaluation.decidedBy === "existing_client_issue") {
     await enqueue("escalation_email", call.id, `escalation:${call.id}`);
+  }
+  if (a.callType === "followup_update") {
+    await enqueue("client_request_email", call.id, `client_request:${call.id}`);
   }
   if (a.complianceFlags.some((f) => f.code === "price_leak")) {
     await enqueue("price_leak_alert", call.id, `price_leak:${call.id}`);

@@ -170,3 +170,24 @@ export function digestEmail(d: DigestData): Rendered {
     text: `${subject}\nOpen escalations: ${d.openEscalations}\nOverdue follow-ups: ${d.overdueFollowups}\n${d.dashboardUrl}`,
   };
 }
+
+export function clientRequestEmail(args: {
+  callerName: string | null;
+  callerNumber: string | null;
+  details: string | null;
+  at: Date;
+  dashboardUrl: string;
+}): Rendered {
+  const subject = `Client update request: ${args.callerName ?? "a client"} is waiting to hear back`;
+  const body = [
+    `<p style="margin:0;font-size:15px;line-height:1.5">An existing client asked for an update. The assistant told them it would note it down and that someone would get back to them.</p>`,
+    section("Client", `<p style="margin:0;font-size:14px">${esc(args.callerName ?? "Not stated")} · ${esc(args.callerNumber ?? "number not available")}</p>`),
+    section("What they asked", `<p style="margin:0;font-size:14px">${esc(args.details ?? "See the call on the dashboard.")}</p>`),
+    section("Called at", `<p style="margin:0;font-size:14px">${esc(fmtDateTime(args.at))}</p>`),
+  ].join("");
+  return {
+    subject,
+    html: shell("Client request", "Please get back to the client", body, { href: args.dashboardUrl, label: "Open the call" }),
+    text: `${subject}\n${args.callerName ?? ""} ${args.callerNumber ?? ""}\n${args.details ?? ""}\n${args.dashboardUrl}`,
+  };
+}

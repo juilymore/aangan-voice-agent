@@ -1,18 +1,6 @@
 // The rule engine — one pure function used by check_fit (mid-call) and the post-call pipeline.
 // Rules: docs/functional_design.md §7.3–§7.7. No I/O, no AI, no randomness.
-import {
-  AREA_FAIL_TERMS,
-  AREA_PASS_TERMS,
-  COMMERCIAL_MAX_SQFT,
-  COMMERCIAL_MIN_SQFT,
-  HOT_MIN_SCORE,
-  LATE_START_DAYS,
-  MIN_WEEKS_TO_COMPLETION,
-  SOON_DAYS,
-  TEMPERATURE_POINTS as P,
-  TIGHT_TIMELINE_WEEKS,
-  WARM_MIN_SCORE,
-} from "@/config/rules";
+import { DEFAULT_RULE_SETTINGS, type RuleSettings } from "./settings-schema";
 import { checkBudget } from "./budget";
 import {
   RuleInput,
@@ -26,11 +14,11 @@ import {
 const DAY = 86_400_000;
 const NON_EXECUTION_INTENTS = new Set(["advice_only", "decor_only", "furniture_only", "vastu_only", "structural_only"]);
 
-export function matchArea(locality: string | null): "pass" | "fail" | "unclear" {
+export function matchArea(locality: string | null, s: RuleSettings = DEFAULT_RULE_SETTINGS): "pass" | "fail" | "unclear" {
   if (!locality) return "unclear";
-  const s = ` ${locality.toLowerCase().replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ")} `;
-  if (AREA_FAIL_TERMS.some((t) => s.includes(` ${t}`))) return "fail";
-  if (AREA_PASS_TERMS.some((t) => s.includes(` ${t}`))) return "pass";
+  const loc = ` ${locality.toLowerCase().replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ")} `;
+  if (s.areaFailTerms.some((t) => loc.includes(` ${t}`))) return "fail";
+  if (s.areaPassTerms.some((t) => loc.includes(` ${t}`))) return "pass";
   return "unclear";
 }
 
@@ -45,27 +33,27 @@ function realProject(i: RuleInput): CriterionResult {
   return { criterion: "real_project", status: "unclear", reason: "Scope or execution intent not stated", source };
 }
 
-function serviceArea(i: RuleInput): CriterionResult {
+function serviceArea(i: RuleInput, s: RuleSettings): CriterionResult {
   const source = "qualified.md §2; services.md service area";
-  const m = matchArea(i.locality);
+  const m = matchArea(i.locality, s);
   const where = i.locality ?? "not given";
   if (m === "fail") return { criterion: "service_area", status: "fail", reason: `Outside Pune/PCMC (${where})`, source };
   if (m === "pass") return { criterion: "service_area", status: "pass", reason: `In service area (${where})`, source };
   return { criterion: "service_area", status: "unclear", reason: `Locality not recognised (${where})`, source };
 }
 
-function timeline(i: RuleInput, flags: string[], followUps: string[]): CriterionResult {
+function timeline(i: RuleInput, flags: string[], followUps: string[], s: RuleSettings): CriterionResult {
   const source = "qualified.md §3; services.md minimum lead time; functional_design Q2";
-  if (i.startInDays != null && i.startInDays >= LATE_START_DAYS) flags.push("late_start");
+  if (i.startInDays != null && i.startInDays >= s.lateStartDays) flags.push("late_start");
   if (!i.completionBy) {
     followUps.push("When would they need the project complete?");
     return { criterion: "timeline", status: "pass", reason: "No deadline given (no impossible deadline)", source };
   }
   const weeks = (i.completionBy.getTime() - i.today.getTime()) / (7 * DAY);
-  if (weeks < MIN_WEEKS_TO_COMPLETION) {
+  if (weeks < s.minWeeksToCompletion) {
     return { criterion: "timeline", status: "fail", reason: "Needs completion sooner than design and execution can take", source };
   }
-  if (weeks < TIGHT_TIMELINE_WEEKS) flags.push("tight_timeline");
+  if (weeks < s.tightTimelineWeeks) flags.push("tight_timeline");
   return { criterion: "timeline", status: "pass", reason: "Deadline leaves enough time", source };
 }
 
@@ -86,7 +74,8 @@ function decisionMaker(i: RuleInput, followUps: string[]): CriterionResult {
   }
 }
 
-function temperatureOf(i: RuleInput, outcome: Evaluation["outcome"]): { t: Temperature; score: number; reasons: string[] } {
+function temperatureOf(i: RuleInput, outcome: Evaluation["outcome"], s: RuleSettings): { t: Temperature; score: number; reasons: string[] } {
+  const P = s.temperaturePoints;
   const reasons: string[] = [];
   let score = 0;
   const add = (cond: boolean, pts: number, why: string) => {
@@ -97,7 +86,7 @@ function temperatureOf(i: RuleInput, outcome: Evaluation["outcome"]): { t: Tempe
   };
   add(i.consultIntent, P.consultIntent, "wants a consultation");
   add(i.referral, P.referral, "referred");
-  add(i.urgent || (i.startInDays != null && i.startInDays <= SOON_DAYS), P.soon, "wants to start soon");
+  add(i.urgent || (i.startInDays != null && i.startInDays <= s.soonDays), P.soon, "wants to start soon");
   add(i.commitment, P.commitment, "clear commitment");
   add(i.scope !== "unknown" && (i.sizeSqft != null || i.bhk != null), P.clearScopeAndSize, "clear scope and size");
   add(i.exploring, P.exploring, "just exploring");
@@ -107,11 +96,11 @@ function temperatureOf(i: RuleInput, outcome: Evaluation["outcome"]): { t: Tempe
   if (outcome === "not_qualified" || outcome === "not_a_lead") {
     return { t: "cold", score, reasons: [...reasons, "cold because not a qualified lead"] };
   }
-  const t: Temperature = score >= HOT_MIN_SCORE ? "hot" : score >= WARM_MIN_SCORE ? "warm" : "cold";
+  const t: Temperature = score >= s.hotMinScore ? "hot" : score >= s.warmMinScore ? "warm" : "cold";
   return { t, score, reasons };
 }
 
-export function evaluate(draft: RuleInputDraft): Evaluation {
+export function evaluate(draft: RuleInputDraft, s: RuleSettings = DEFAULT_RULE_SETTINGS): Evaluation {
   const i = RuleInput.parse(draft);
   const flags: string[] = [];
   const followUps: string[] = [];
@@ -120,13 +109,13 @@ export function evaluate(draft: RuleInputDraft): Evaluation {
   if (i.priceAsked) flags.push("price_asked");
   if (i.structuralRequest) flags.push("structural_request");
 
-  const budget = checkBudget(i);
+  const budget = checkBudget(i, s);
   if (budget.tight) flags.push("budget_tight");
 
   const perCriterion: CriterionResult[] = [
     realProject(i),
-    serviceArea(i),
-    timeline(i, flags, followUps),
+    serviceArea(i, s),
+    timeline(i, flags, followUps, s),
     { criterion: "budget", status: budget.status, reason: budget.reason, source: "qualified.md §4; pricing.md (server only)" },
     decisionMaker(i, followUps),
   ];
@@ -138,9 +127,9 @@ export function evaluate(draft: RuleInputDraft): Evaluation {
   let exclusion: Evaluation["exclusion"] = null;
   if (i.excludedUse) {
     exclusion = { code: "excluded_type", reason: `${i.excludedUse} projects are out of scope` };
-  } else if (i.propertyKind === "commercial" && i.sizeSqft != null && i.sizeSqft < COMMERCIAL_MIN_SQFT) {
+  } else if (i.propertyKind === "commercial" && i.sizeSqft != null && i.sizeSqft < s.commercialMinSqft) {
     exclusion = { code: "commercial_too_small", reason: "Commercial space below the studio's minimum scale" };
-  } else if (i.propertyKind === "commercial" && i.sizeSqft != null && i.sizeSqft > COMMERCIAL_MAX_SQFT) {
+  } else if (i.propertyKind === "commercial" && i.sizeSqft != null && i.sizeSqft > s.commercialMaxSqft) {
     exclusion = { code: "commercial_too_large", reason: "Commercial space above the usual maximum; designer to decide" };
   }
 
@@ -180,7 +169,7 @@ export function evaluate(draft: RuleInputDraft): Evaluation {
     flags.push("later_start_not_offered");
   }
 
-  const temp = temperatureOf(i, outcome);
+  const temp = temperatureOf(i, outcome, s);
   return {
     outcome,
     decidedBy,

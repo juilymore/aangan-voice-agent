@@ -5,7 +5,8 @@ import { z } from "zod";
 
 export const CallType = z.enum([
   "new_enquiry",
-  "existing_client_issue",
+  "existing_client_issue", // complaint / escalation
+  "followup_update", // existing client asking for an update
   "reschedule_request",
   "vendor_other",
   "wrong_number",

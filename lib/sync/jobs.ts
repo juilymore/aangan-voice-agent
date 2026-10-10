@@ -4,13 +4,13 @@ import { db, schema } from "@/lib/db";
 import { env } from "@/lib/env";
 import { deps as realDeps, type Deps } from "@/lib/providers";
 import type { DealInput, DealStage } from "@/lib/crm/types";
-import { designerEmail, escalationEmail, priceLeakEmail } from "@/lib/email/templates";
+import { clientRequestEmail, designerEmail, escalationEmail, priceLeakEmail } from "@/lib/email/templates";
 import type { CallChange } from "./hooks";
 
 // Every external side effect (email, HubSpot, calendar edits) goes through sync_jobs — build_spec §8.11:
 // unique idempotency key, exponential backoff, 6 attempts then "dead", errors never swallowed.
 
-export type JobKind = "designer_email" | "escalation_email" | "price_leak_alert" | "hubspot_sync" | "calendar_update";
+export type JobKind = "designer_email" | "escalation_email" | "client_request_email" | "price_leak_alert" | "hubspot_sync" | "calendar_update";
 const MAX_ATTEMPTS = 6;
 
 export async function enqueue(kind: JobKind, callId: string, idempotencyKey: string, payload: Record<string, unknown> = {}) {
@@ -162,6 +162,23 @@ async function runJob(kind: JobKind, callId: string, payload: Record<string, unk
     const to = e.ESCALATION_EMAIL ?? e.OWNER_EMAIL ?? e.EMAIL_TEST_TO;
     if (!to) throw new Error("no ESCALATION_EMAIL / OWNER_EMAIL configured");
     const m = escalationEmail({
+      callerName: call.callerName,
+      callerNumber: call.callerNumber,
+      details: (call.extracted?.fields.existing_client_details?.value as string | undefined) ?? call.summary,
+      at: call.startedAt ?? call.createdAt,
+      dashboardUrl: dashboardUrl(callId),
+    });
+    await d.email.send({ to, ...m, idempotencyKey: key });
+    return;
+  }
+
+  if (kind === "client_request_email") {
+    const [designer] = call.assignedDesigner
+      ? await db().select().from(schema.designers).where(eq(schema.designers.key, call.assignedDesigner))
+      : [];
+    const to = designer?.email ?? e.OWNER_EMAIL ?? e.EMAIL_TEST_TO;
+    if (!to) throw new Error("no designer or OWNER_EMAIL configured");
+    const m = clientRequestEmail({
       callerName: call.callerName,
       callerNumber: call.callerNumber,
       details: (call.extracted?.fields.existing_client_details?.value as string | undefined) ?? call.summary,

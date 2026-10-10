@@ -15,6 +15,13 @@
       "when": 1791543178372,
       "tag": "0001_bookings_no_overlap",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791623277026,
+      "tag": "0002_rubric_learning_calltypes",
+      "breakpoints": true
     }
   ]
 }

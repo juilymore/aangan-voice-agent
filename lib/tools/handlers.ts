@@ -11,6 +11,7 @@ import { evaluate } from "@/lib/rules/engine";
 import { lineFor, type Lang } from "@/lib/rules/lines";
 import type { CallAction } from "@/lib/rules/types";
 import { normalizeCheckFit } from "./normalize";
+import { getRuleSettings } from "@/lib/rules/settings";
 
 const last10 = (n: string | null | undefined) => (n ? n.replace(/\D/g, "").slice(-10) || null : null);
 const str = z.union([z.string(), z.number()]).transform(String).optional();
@@ -75,7 +76,7 @@ export async function checkFit(p: z.infer<typeof CheckFitParams>, callId: string
 
   const input = normalizeCheckFit(p, new Date());
   input.laterDateOffered = clarifies("timeline_later") > 0;
-  const result = evaluate(input);
+  const result = evaluate(input, await getRuleSettings());
   let action: CallAction = result.callAction;
 
   // After two clarifies on the same criterion: proceed and record the uncertainty (build_spec §6).

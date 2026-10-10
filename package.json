@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "rules:report": "tsx --conditions=react-server scripts/rules-report.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

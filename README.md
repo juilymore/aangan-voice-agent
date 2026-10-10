@@ -39,9 +39,9 @@ npm run lint
 ```
 
 ## Checkpoints
-1. **Foundation**: schema, persona switcher, provider interfaces and mocks, Vercel deploy ← *current*
-2. Rules engine plus the test table
-3. Post-call pipeline (mock mode) plus fixtures
+1. **Foundation**: schema, persona switcher, provider interfaces and mocks ✅ (Vercel deploy deferred to step 5)
+2. **Rules engine** plus the test table ✅ (`npm run rules:report` → docs/rules_report.md)
+3. Post-call pipeline (mock mode) plus fixtures ← *next*
 4. Dashboard
 5. Google Calendar plus the 4 tool endpoints
 6. Vaani wiring

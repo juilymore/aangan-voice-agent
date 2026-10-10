@@ -301,7 +301,7 @@ else                                             -> qualified       (with notes 
 
 Two timeline flags:
 - `tight_timeline`: the completion date is 8–16 weeks away. The lead still passes; the designer should know.
-- `late_start`: the caller wants to start execution 6 or more months out. The lead still passes; temperature is lower. See Q2b.
+- `late_start`: the caller wants to start 4 or more months out (`LATE_START_DAYS = 120`, set so F06 is caught). The lead still passes. See Q2b.
 
 ### 7.6 Budget sanity check (server side, never spoken)
 

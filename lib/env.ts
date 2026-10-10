@@ -29,7 +29,7 @@ const schema = z.object({
 
   // Gemini
   GEMINI_API_KEY: z.string().optional(),
-  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  GEMINI_MODEL: z.string().default("gemini-3.8-flash"),
 
   // Email (Resend)
   RESEND_API_KEY: z.string().optional(),

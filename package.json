@@ -12,7 +12,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx scripts/seed.ts",
-    "rules:report": "tsx --conditions=react-server scripts/rules-report.ts"
+    "rules:report": "tsx --conditions=react-server scripts/rules-report.ts",
+    "eval:gemini": "tsx --conditions=react-server scripts/eval-gemini.mts",
+    "test:fixtures": "vitest run tests/pipeline.test.ts tests/rules.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

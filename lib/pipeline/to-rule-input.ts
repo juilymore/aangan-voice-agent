@@ -32,7 +32,10 @@ export function toRuleInput(x: ExtractedCall, ctx: Ctx): RuleInputDraft {
     bhk: num("bhk"),
     scope: scope === "full_home" || scope === "partial" || scope === "single_room" ? scope : "unknown",
     roomsCount: num("rooms_count"),
-    intent: (pick(Intent, "intent") as RuleInputDraft["intent"]) ?? "unclear",
+    // functional_design §7.3 row 1: naming rooms / a full home with no advice-only signal counts as a real project.
+    intent:
+      (pick(Intent, "intent") as RuleInputDraft["intent"]) ??
+      (["full_home", "partial", "single_room"].includes(scope) || x.fields.rooms_count != null ? "full_execution" : "unclear"),
     completionBy: typeof completion === "string" && /^\d{4}-\d{2}-\d{2}$/.test(completion) ? completion : null,
     startInDays: typeof startIn === "number" && Number.isFinite(startIn) ? Math.round(startIn) : null,
     decisionMaker: (pick(DecisionMaker, "decision_maker") as RuleInputDraft["decisionMaker"]) ?? "unknown",

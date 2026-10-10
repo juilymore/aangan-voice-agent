@@ -6,12 +6,12 @@ import { writeFileSync } from "node:fs";
 const COLS = ["Trigger", "Input", "Context", "Processing", "AI", "Output"];
 const ACTORS = [
   ["Caller", "(User)", "#e9efff"],
-  ["Voice Agent", "(Vaani · GPT-4o)", "#f1e9ff"],
-  ["System", "(live tools, during the call)", "#fff6dd"],
-  ["System", "(pipeline, after the call)", "#fdeee2"],
-  ["AI Model", "(Gemini Flash)", "#e8f7ee"],
-  ["Integrations", "(Resend · HubSpot · Calendar)", "#e4f3f8"],
-  ["Studio Team", "(Nikhil · Ruhi · Jay)", "#fde9ef"],
+  ["Voice Agent", "(Vaani)", "#f1e9ff"],
+  ["System", "(App Backend, during the call)", "#fff6dd"],
+  ["System", "(App Backend, after the call)", "#fdeee2"],
+  ["AI Models", "(LLM)", "#e8f7ee"],
+  ["Integrations", "(Resend, HubSpot, Calendar)", "#e4f3f8"],
+  ["Studio Team", "(Nikhil, Ruhi, Jay)", "#fde9ef"],
 ];
 const STYLE = {
   user: ["#e3e5ff", "#4a4fd4"],
@@ -25,7 +25,7 @@ const STYLE = {
 
 const W = 1500, ACT_W = 156, COL_W = (W - ACT_W) / 6, TITLE_H = 58, HEAD_H = 40, ROW_H = 108;
 const top = TITLE_H + HEAD_H;
-const H = top + ACTORS.length * ROW_H + 52;
+const H = top + ACTORS.length * ROW_H + 20;
 const colX = (c) => ACT_W + c * COL_W;
 const BW = COL_W - 22;
 
@@ -50,31 +50,31 @@ function wrap(text, max) {
 }
 
 // ---- Caller ----
-box("t0", 0, 0, "user", "① Calls the studio number, any hour of the day or night");
-box("i0", 1, 0, "input", "② Speaks: name, area, size, scope, timeline, who decides (English · Hindi · Marathi)");
-box("o0", 5, 0, "out", "⑦ Hears the answer: a booked consultation with Ruhi or Jay, or a kind honest decline. Never a price");
+box("t0", 0, 0, "user", "Calls the studio number (any hour, day or night)");
+box("i0", 1, 0, "input", "Tells the agent about the project: area, size, scope, timeline");
+box("o0", 5, 0, "out", "Gets a consultation booked, or a polite no");
 // ---- Voice agent ----
-box("c1", 2, 1, "ctx", "Prompt v3.4: studio facts, 9 questions, call types, guardrails. No prices, no rubric");
-box("p1", 3, 1, "proc", "③ Says it is an AI and recorded. One question at a time. Tells the call type: lead · client update · complaint · other");
-box("a1", 4, 1, "ai", "④ GPT-4o runs the conversation, calls the 4 live tools, speaks returned lines word for word");
+box("c1", 2, 1, "ctx", "Studio services, rules and the 9 standard questions (no prices)");
+box("p1", 3, 1, "proc", "Asks questions one at a time and spots the call type: lead, update, complaint or other");
+box("a1", 4, 1, "ai", "Voice AI holds the conversation and calls the live tools");
 // ---- System (live) ----
-box("i2", 1, 2, "input", "⑤ Tool request with what was said so far: area, size, scope, timeline, budget only if volunteered");
-box("c2", 2, 2, "ctx", "Editable rubric: 5 criteria, service area, budget floor (server only), shared calendar busy times");
-box("p2", 3, 2, "proc", "⑥ Rule engine: proceed, ask one question, or decline. Finds open slots. Books with no overlaps");
-box("o2", 5, 2, "out", "Fit decision + the exact line to say. Slot booked and saved");
+box("i2", 1, 2, "input", "Details collected so far");
+box("c2", 2, 2, "ctx", "Lead rubric: 5 criteria, service area, budget check, calendar");
+box("p2", 3, 2, "proc", "Checks fit, finds open slots, books with no double booking");
+box("o2", 5, 2, "out", "Fit answer and booked slot go back to the agent");
 // ---- System (after) ----
-box("i3", 1, 3, "input", "⑧ Signed webhook when the call ends: transcript, times, phone number");
-box("c3", 2, 3, "ctx", "Rubric, office hours, designers, and past corrections (Teach the AI)");
-box("p3", 3, 3, "proc", "⑨ Hide numbers → check each quote is real → rules → hot/warm/cold → price-leak scan → assign designer → write brief");
-box("o3", 5, 3, "out", "Verdict, temperature, brief, flags and follow-ups saved to the database");
+box("i3", 1, 3, "input", "Call ends: transcript sent to the system");
+box("c3", 2, 3, "ctx", "Rubric, office hours, designers, past corrections");
+box("p3", 3, 3, "proc", "Hides personal numbers, scores the lead, flags price mentions, assigns a designer, writes the brief");
+box("o3", 5, 3, "out", "Verdict, hot / warm / cold, brief and flags saved");
 // ---- AI ----
-box("a4", 4, 4, "ai", "⑩ Gemini reads the redacted transcript and extracts facts, each with a real quote. It never decides");
+box("a4", 4, 4, "ai", "Reads the transcript and pulls out facts with the exact quote. Does not decide");
 // ---- Integrations ----
-box("p5", 3, 5, "proc", "⑪ Sends the designer email (Resend), creates the HubSpot deal, adds the calendar event, alerts on complaints");
+box("p5", 3, 5, "proc", "Sends designer email, creates HubSpot deal, adds calendar event, alerts on complaints");
 // ---- Team ----
-box("t6", 0, 6, "user", "⑫ Gets the email or opens the dashboard");
-box("i6", 1, 6, "input", "⑬ Corrects a verdict or fact, edits the Rubric, marks a callback done");
-box("o6", 5, 6, "out", "Dashboard: calls, brief, verdicts, metrics, revenue estimate. Daily digest. Email + deal + calendar");
+box("t6", 0, 6, "user", "Opens the email or the dashboard");
+box("i6", 1, 6, "input", "Corrects a verdict or fact, edits the rubric");
+box("o6", 5, 6, "out", "Dashboard with calls, briefs, metrics and revenue estimate");
 
 // ---- arrows (dashed, orthogonal) ----
 const arrows = [];
@@ -147,7 +147,6 @@ for (const b of Object.values(boxes)) {
   const startY = b.cy - ((b.lines.length - 1) * 14.5) / 2 + 4;
   b.lines.forEach((l, i) => (svg += `<text x="${b.cx}" y="${startY + i * 14.5}" text-anchor="middle" font-size="12.2" fill="#14284b">${esc(l)}</text>`));
 }
-svg += `<text x="${W / 2}" y="${H - 18}" text-anchor="middle" font-size="12.5" fill="#4b5b76">Dashed arrows show the flow. The voice agent never sees prices or the rubric: every decision is made by the rule engine on the server. Humans stay in the loop: nothing is auto-rejected, and every verdict can be overridden.</text>`;
 svg += `</svg>\n`;
 writeFileSync("docs/components_map.svg", svg);
 console.log(`docs/components_map.svg (${W}x${H}), ${Object.keys(boxes).length} boxes, ${arrows.length} arrows`);

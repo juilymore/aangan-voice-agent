@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { currentPersona } from "@/lib/persona";
 import { getToday, listDesigners, designerName, scopeFor, type CallRow } from "@/lib/data/calls";
-import { formatDayLabel, formatPhone, formatRelative, formatTime, greeting, istDayStart } from "@/lib/data/format";
-import { callTypeLabel, followupReasons, modeLabel } from "@/lib/data/labels";
+import { formatDayLabel, formatPhone, formatRelative, formatTime, greeting, istDateKey, istDayStart } from "@/lib/data/format";
+import { callCategory, flagLabel, followupReasons, modeLabel, promisedLine } from "@/lib/data/labels";
 import { FOLLOWUP_OVERDUE_HOURS } from "@/lib/data/metrics-config";
-import { DemoChip, OutcomeChip, ReasonChip, TemperatureChip } from "@/components/chips";
+import { CallTypeChip, DemoChip, OutcomeChip, ReasonChip, TemperatureChip } from "@/components/chips";
 import { EmptyState, GlassCard, SectionTitle, StatTile } from "@/components/ui";
 import { CountUp } from "@/components/count-up";
 import { ScopeToggle } from "@/components/scope-toggle";
@@ -41,10 +41,12 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const statusLine = [
     `${plural(data.stats.newEnquiries, "new enquiry", "new enquiries")} since yesterday`,
     `${plural(data.stats.consultationsToday, "consultation")} today`,
-    data.stats.followupsOpen ? `${plural(data.stats.followupsOpen, "follow-up")} waiting` : null,
+    data.stats.followupsOpen ? `${plural(data.stats.followupsOpen, "callback")} owed` : null,
   ]
     .filter(Boolean)
     .join(" · ");
+  const scopeQ = showAll ? "&scope=all" : "";
+  const callsHref = (q: string) => `/calls?${q}${scopeQ}`;
 
   return (
     <div className="stagger space-y-8">
@@ -64,10 +66,39 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
           {!isOwner && <ScopeToggle showAll={showAll} basePath="/" />}
         </div>
         <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatTile icon={SparkleIcon} value={<CountUp value={data.stats.newEnquiries} />} label="New enquiries" hint="since yesterday" />
-          <StatTile icon={CalendarIcon} value={<CountUp value={data.stats.consultationsToday} />} label="Consultations today" />
-          <StatTile icon={InboxIcon} value={<CountUp value={data.stats.followupsOpen} />} label="Follow-ups waiting" />
-          <StatTile icon={FlameIcon} tone="clay" value={<CountUp value={data.stats.hotOpen} />} label="Hot leads open" />
+          <StatTile
+            icon={CalendarIcon}
+            value={<CountUp value={data.stats.consultationsToday} />}
+            label="Consultations today"
+            hint="Meetings already booked for today"
+            href="#consultations"
+            info="Site visits and phone consultations on the studio calendar for today. Nothing to chase: just turn up."
+          />
+          <StatTile
+            icon={InboxIcon}
+            value={<CountUp value={data.stats.followupsOpen} />}
+            label="Callbacks owed"
+            hint="People someone must call back"
+            href={callsHref("followup=1")}
+            info="Callers not booked yet, dropped calls, leads that need review, and existing clients who asked for an update. Each one leaves the count when someone marks the follow-up done."
+          />
+          <StatTile
+            icon={FlameIcon}
+            tone="clay"
+            value={<CountUp value={data.stats.hotOpen} />}
+            label="Hot leads open"
+            hint="Ready to go, no consultation yet"
+            href={callsHref("temperature=hot&outcome=qualified&stage=none")}
+            info="Qualified leads rated hot (clear project, soon, keen to meet) whose consultation has not happened yet. Booked or not, these are the ones to look after first."
+          />
+          <StatTile
+            icon={SparkleIcon}
+            value={<CountUp value={data.stats.newEnquiries} />}
+            label="New enquiries"
+            hint="Leads since yesterday"
+            href={callsHref(`category=lead&from=${istDateKey(istDayStart(now, -1))}`)}
+            info="Calls about a new project since the start of yesterday (IST), whatever the verdict."
+          />
         </div>
       </section>
 
@@ -87,7 +118,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
               </h2>
               <ul className="mt-3 space-y-2">
                 {data.escalations.map((c) => (
-                  <AlertRow key={`e${c.id}`} call={c} kind="Existing client escalation" now={now} />
+                  <AlertRow key={`e${c.id}`} call={c} kind="Complaint / escalation" now={now} promise={promisedLine(c.flags)} />
                 ))}
                 {data.priceLeaks.map((c) => (
                   <AlertRow key={`p${c.id}`} call={c} kind="Agent mentioned a price" now={now} />
@@ -98,9 +129,48 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
         </section>
       )}
 
+      {/* Client update requests */}
+      {data.clientRequests.length > 0 && (
+        <section
+          aria-labelledby="requests-title"
+          className="rounded-2xl border border-amber/30 bg-amber-soft/80 p-5 shadow-[0_10px_30px_-14px_rgba(154,106,28,0.35)] backdrop-blur"
+        >
+          <div className="flex items-start gap-3">
+            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-amber text-white">
+              <UsersIcon size={18} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 id="requests-title" className="display text-sm text-amber">
+                Client requests
+              </h2>
+              <p className="mt-1 text-xs text-ink-soft">
+                Existing clients asking how their project is going. They stay here until someone marks the follow-up done.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {data.clientRequests.map((c) => (
+                  <li key={c.id}>
+                    <Link
+                      href={`/calls/${c.id}`}
+                      className="group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-white/65 px-3 py-2 text-sm transition-colors hover:bg-white"
+                    >
+                      <span className="font-medium text-ink">{c.callerName || formatPhone(c.callerNumber)}</span>
+                      {c.isTest && <DemoChip />}
+                      {c.flags?.includes("after_hours") && <ReasonChip>{flagLabel("after_hours")}</ReasonChip>}
+                      <span className="text-xs text-mute">{formatRelative(c.startedAt ?? c.createdAt, now)}</span>
+                      <span className="basis-full text-xs font-medium text-amber sm:basis-auto">{promisedLine(c.flags)}</span>
+                      <ArrowRightIcon size={14} className="ml-auto text-amber transition-transform group-hover:translate-x-0.5" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-5">
         {/* Consultations */}
-        <GlassCard className="p-5 sm:p-6 lg:col-span-3" aria-labelledby="consult-title">
+        <GlassCard id="consultations" className="scroll-mt-24 p-5 sm:p-6 lg:col-span-3" aria-labelledby="consult-title">
           <SectionTitle id="consult-title" eyebrow="Studio calendar" title="Consultations" />
           {data.consultations.length === 0 ? (
             <EmptyState icon={CalendarIcon} title="A quiet calendar">
@@ -172,7 +242,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
           <SectionTitle
             id="followup-title"
             eyebrow="Waiting on us"
-            title="Follow-up queue"
+            title="Callbacks owed"
             action={
               data.followups.length > 0 ? (
                 <Link
@@ -209,6 +279,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
                           {c.isTest && <DemoChip />}
                         </span>
                         <span className="mt-1 flex flex-wrap gap-1">
+                          {callCategory(c.callType) !== "lead" && <CallTypeChip type={c.callType} />}
                           {reasons.length ? reasons.map((r) => <ReasonChip key={r}>{r}</ReasonChip>) : <ReasonChip>Follow up</ReasonChip>}
                         </span>
                         <span className={`mt-1 block text-[11px] ${overdue ? "text-terracotta" : "text-mute"}`}>
@@ -264,7 +335,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
                         {c.callerName || "Unknown caller"} {c.isTest && <DemoChip />}
                       </span>
                       <span className="block text-xs text-mute">
-                        {callTypeLabel(c.callType)} · {formatRelative(c.startedAt ?? c.createdAt, now)}
+                        {formatRelative(c.startedAt ?? c.createdAt, now)}
                       </span>
                     </span>
                     <TemperatureChip value={c.temperature} />
@@ -273,7 +344,8 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
                     {c.designerBrief?.oneLiner || c.summary || "Processing the call…"}
                   </span>
                   <span className="mt-auto flex items-center gap-2 pt-1">
-                    <OutcomeChip value={c.qualification} />
+                    <CallTypeChip type={c.callType} />
+                    {callCategory(c.callType) === "lead" && <OutcomeChip value={c.qualification} />}
                     {c.assignedDesigner && (
                       <span className="inline-flex items-center gap-1 text-[11px] text-mute">
                         <UsersIcon size={12} />
@@ -291,7 +363,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/">) {
   );
 }
 
-function AlertRow({ call, kind, now }: { call: CallRow; kind: string; now: Date }) {
+function AlertRow({ call, kind, now, promise }: { call: CallRow; kind: string; now: Date; promise?: string }) {
   return (
     <li>
       <Link
@@ -302,6 +374,7 @@ function AlertRow({ call, kind, now }: { call: CallRow; kind: string; now: Date 
         <span className="font-medium text-ink">{call.callerName || formatPhone(call.callerNumber)}</span>
         {call.isTest && <DemoChip />}
         <span className="text-xs text-mute">{formatRelative(call.startedAt ?? call.createdAt, now)}</span>
+        {promise && <span className="basis-full text-xs font-medium text-alert sm:basis-auto">{promise}</span>}
         <ArrowRightIcon size={14} className="ml-auto text-alert transition-transform group-hover:translate-x-0.5" />
       </Link>
     </li>

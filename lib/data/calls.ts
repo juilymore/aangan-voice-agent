@@ -4,6 +4,7 @@ import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lt, ne, or, sql
 import { db, schema } from "@/lib/db";
 import { TEAM, type Persona } from "@/config/team";
 import { istDayStart, parseIstDate } from "./format";
+import { CALL_CATEGORIES, type CallCategory } from "./labels";
 
 const { calls, bookings, callAudit, syncJobs, designers } = schema;
 
@@ -54,6 +55,9 @@ export type CallFilters = {
   booked?: "yes" | "no";
   followup?: boolean;
   flag?: string;
+  category?: CallCategory;
+  /** outcome_stage, e.g. "none" for leads that have not had their consultation yet */
+  stage?: string;
   from?: string;
   to?: string;
   page: number;
@@ -86,6 +90,15 @@ function filterWhere(f: CallFilters, scope: Scope): SQL | undefined {
   if (f.booked === "yes") parts.push(hasLiveBooking);
   if (f.booked === "no") parts.push(sql`not ${hasLiveBooking}`);
   if (f.followup) parts.push(and(eq(calls.needsFollowup, true), isNull(calls.followupDoneAt)));
+  if (f.category) {
+    const types = CALL_CATEGORIES[f.category].types;
+    parts.push(
+      f.category === "other"
+        ? or(isNull(calls.callType), sql`${calls.callType}::text in (${sql.join(types.map((t) => sql`${t}`), sql`, `)})`)
+        : sql`${calls.callType}::text in (${sql.join(types.map((t) => sql`${t}`), sql`, `)})`,
+    );
+  }
+  if (f.stage) parts.push(sql`${calls.outcomeStage} = ${f.stage}`);
   if (f.flag) {
     if (COMPLIANCE_CODES.includes(f.flag)) {
       parts.push(sql`${calls.complianceFlags} @> ${JSON.stringify([{ code: f.flag }])}::jsonb`);
@@ -151,12 +164,18 @@ export async function getToday(scope: Scope, now: Date) {
   const scoped = scope.designer ? eq(calls.assignedDesigner, scope.designer) : undefined;
   const openFollowup = and(eq(calls.needsFollowup, true), isNull(calls.followupDoneAt));
 
-  const [escalations, priceLeaks, consultRows, followups, newest, [stats]] = await Promise.all([
+  const [escalations, clientRequests, priceLeaks, consultRows, followups, newest, [stats]] = await Promise.all([
     // Escalations and price leaks are studio-wide safety alerts: shown to everyone.
     db()
       .select()
       .from(calls)
       .where(and(eq(calls.callType, "existing_client_issue"), openFollowup))
+      .orderBy(desc(when)),
+    // Client update requests (existing clients asking how their project is going): studio-wide too.
+    db()
+      .select()
+      .from(calls)
+      .where(and(eq(calls.callType, "followup_update"), openFollowup))
       .orderBy(desc(when)),
     db()
       .select()
@@ -191,7 +210,8 @@ export async function getToday(scope: Scope, now: Date) {
     db()
       .select({
         newEnquiries: sql<number>`count(*) filter (where ${calls.callType} = 'new_enquiry' and ${when} >= ${yesterday.toISOString()})`,
-        hotOpen: sql<number>`count(*) filter (where ${calls.temperature} = 'hot' and ${calls.outcomeStage} = 'none')`,
+        hotOpen: sql<number>`count(*) filter (where ${calls.temperature} = 'hot' and ${calls.qualification} = 'qualified' and ${calls.outcomeStage} = 'none')`,
+        callbacksOwed: sql<number>`count(*) filter (where ${calls.needsFollowup} and ${calls.followupDoneAt} is null)`,
         qualifiedWeek: sql<number>`count(*) filter (where ${calls.qualification} = 'qualified' and ${when} >= ${week.toISOString()})`,
       })
       .from(calls)
@@ -221,6 +241,7 @@ export async function getToday(scope: Scope, now: Date) {
 
   return {
     escalations,
+    clientRequests,
     priceLeaks,
     consultations,
     followups,
@@ -230,7 +251,7 @@ export async function getToday(scope: Scope, now: Date) {
       hotOpen: Number(stats?.hotOpen ?? 0),
       qualifiedWeek: Number(stats?.qualifiedWeek ?? 0),
       consultationsToday: consultations.filter((c) => c.startAt < istDayStart(now, 1)).length,
-      followupsOpen: followups.length,
+      followupsOpen: Number(stats?.callbacksOwed ?? followups.length),
     },
   };
 }

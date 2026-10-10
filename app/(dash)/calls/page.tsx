@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { currentPersona } from "@/lib/persona";
 import { flagOptions, listCalls, listDesigners, PAGE_SIZE, scopeFor, type CallFilters } from "@/lib/data/calls";
-import { COMPLIANCE_LABELS, QUALIFICATION_LABELS, TEMPERATURE_LABELS, complianceLabel, flagLabel } from "@/lib/data/labels";
+import {
+  CALL_CATEGORIES,
+  CATEGORY_KEYS,
+  COMPLIANCE_LABELS,
+  OUTCOME_STAGE_LABELS,
+  QUALIFICATION_LABELS,
+  TEMPERATURE_LABELS,
+  complianceLabel,
+  flagLabel,
+} from "@/lib/data/labels";
 import { CallsTable } from "@/components/calls-table";
 import { ScopeToggle } from "@/components/scope-toggle";
 import { EmptyState, GlassCard, buttonClass, inputClass } from "@/components/ui";
@@ -30,6 +39,8 @@ export default async function CallsPage({ searchParams }: PageProps<"/calls">) {
     booked: oneOf(one(sp.booked), ["yes", "no"] as const),
     followup: one(sp.followup) === "1",
     flag: one(sp.flag)?.match(/^[a-z_]{2,40}$/) ? one(sp.flag) : undefined,
+    category: oneOf(one(sp.category), CATEGORY_KEYS),
+    stage: oneOf(one(sp.stage), Object.keys(OUTCOME_STAGE_LABELS)),
     from: DATE_RE.test(one(sp.from) ?? "") ? one(sp.from) : undefined,
     to: DATE_RE.test(one(sp.to) ?? "") ? one(sp.to) : undefined,
   };
@@ -47,6 +58,8 @@ export default async function CallsPage({ searchParams }: PageProps<"/calls">) {
     booked: raw.booked,
     followup: raw.followup ? "1" : undefined,
     flag: raw.flag,
+    category: raw.category,
+    stage: raw.stage,
     from: raw.from,
     to: raw.to,
     scope: showAll ? "all" : undefined,
@@ -93,7 +106,14 @@ export default async function CallsPage({ searchParams }: PageProps<"/calls">) {
               className={`${inputClass} pl-9`}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <Select name="category" label="Call type" value={raw.category}>
+              {CATEGORY_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {CALL_CATEGORIES[k].label}
+                </option>
+              ))}
+            </Select>
             <Select name="outcome" label="Outcome" value={raw.outcome}>
               {Object.entries(QUALIFICATION_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -119,6 +139,13 @@ export default async function CallsPage({ searchParams }: PageProps<"/calls">) {
             <Select name="booked" label="Meeting" value={raw.booked}>
               <option value="yes">Booked</option>
               <option value="no">Not booked</option>
+            </Select>
+            <Select name="stage" label="Stage" value={raw.stage}>
+              {Object.entries(OUTCOME_STAGE_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
             </Select>
             <Select name="flag" label="Flag" value={raw.flag}>
               {allFlags.map((f) => (

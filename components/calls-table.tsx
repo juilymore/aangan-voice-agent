@@ -2,8 +2,8 @@ import Link from "next/link";
 import type { CallRow, BookingRow, DesignerOption } from "@/lib/data/calls";
 import { designerName } from "@/lib/data/calls";
 import { formatDateTime, formatDuration, formatPhone, formatWhen } from "@/lib/data/format";
-import { callTypeLabel, modeLabel } from "@/lib/data/labels";
-import { ComplianceChip, DemoChip, FlagChip, OutcomeChip, TemperatureChip } from "./chips";
+import { modeLabel } from "@/lib/data/labels";
+import { CallTypeChip, ComplianceChip, DemoChip, FlagChip, OutcomeChip, TemperatureChip } from "./chips";
 import { CalendarIcon, ChevronRightIcon } from "./icons";
 
 type Props = {
@@ -83,7 +83,9 @@ export function CallsTable({ rows, meetings, designers, now }: Props) {
                 <td className="whitespace-nowrap border-b border-line/70 px-3 py-3 text-slate tabular-nums">
                   {formatDuration(c.durationSec)}
                 </td>
-                <td className="whitespace-nowrap border-b border-line/70 px-3 py-3 text-slate">{callTypeLabel(c.callType)}</td>
+                <td className="whitespace-nowrap border-b border-line/70 px-3 py-3">
+                  <CallTypeChip type={c.callType} />
+                </td>
                 <td className="border-b border-line/70 px-3 py-3">
                   <OutcomeChip value={c.qualification} />
                 </td>
@@ -121,9 +123,9 @@ export function CallsTable({ rows, meetings, designers, now }: Props) {
                 <ChevronRightIcon size={16} className="mt-1 shrink-0 text-mute" />
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <CallTypeChip type={c.callType} />
                 <OutcomeChip value={c.qualification} />
                 <TemperatureChip value={c.temperature} />
-                <span className="text-[11px] text-mute">{callTypeLabel(c.callType)}</span>
                 {c.assignedDesigner && (
                   <span className="text-[11px] text-mute">· {designerName(designers, c.assignedDesigner)}</span>
                 )}

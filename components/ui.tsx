@@ -1,5 +1,6 @@
 import Link from "next/link";
-import type { ComponentType, SVGProps } from "react";
+import { useId, type ComponentType, type SVGProps } from "react";
+import { InfoIcon } from "./icons";
 
 type IconType = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
 
@@ -67,22 +68,87 @@ export function StatTile({
   label,
   hint,
   tone,
+  href,
+  info,
 }: {
   icon: IconType;
   value: React.ReactNode;
   label: string;
   hint?: string;
   tone?: "ink" | "clay" | "sage";
+  /** Makes the whole tile a link (e.g. to the matching filtered Calls view). */
+  href?: string;
+  /** Longer explanation in an accessible tooltip. */
+  info?: string;
 }) {
-  return (
-    <div className="glass lift flex items-center gap-4 rounded-2xl px-4 py-4">
+  const body = (
+    <>
       <IconTile icon={icon} tone={tone} />
       <div className="min-w-0">
         <div className="font-[family-name:var(--font-jost)] text-2xl font-light tabular-nums text-ink">{value}</div>
         <div className="eyebrow mt-0.5 !text-[0.62rem]">{label}</div>
-        {hint && <div className="mt-0.5 text-[11px] text-mute">{hint}</div>}
+        {hint && <div className="mt-0.5 text-[11px] leading-snug text-mute">{hint}</div>}
       </div>
+    </>
+  );
+  if (!href && !info)
+    return (
+      <div className="glass lift flex flex-col items-start gap-3 rounded-2xl px-4 py-4 sm:flex-row sm:items-center sm:gap-4">
+        {body}
+      </div>
+    );
+  return (
+    <div className="glass lift relative rounded-2xl">
+      {href ? (
+        <Link
+          href={href}
+          className="flex h-full flex-col items-start gap-3 rounded-2xl px-4 py-4 pr-8 sm:flex-row sm:items-center sm:gap-4"
+        >
+          {body}
+        </Link>
+      ) : (
+        <div className="flex h-full flex-col items-start gap-3 px-4 py-4 pr-8 sm:flex-row sm:items-center sm:gap-4">{body}</div>
+      )}
+      {info && (
+        <span className="absolute right-2 top-2">
+          <InfoTip label={`About ${label}`}>{info}</InfoTip>
+        </span>
+      )}
     </div>
+  );
+}
+
+/** A small (i) button that shows a tooltip on hover and keyboard focus. CSS only. */
+export function InfoTip({
+  label,
+  children,
+  align = "right",
+}: {
+  label: string;
+  children: React.ReactNode;
+  align?: "left" | "right";
+}) {
+  const id = useId();
+  return (
+    <span className="group/tip relative inline-flex">
+      <button
+        type="button"
+        aria-label={label}
+        aria-describedby={id}
+        className="inline-flex size-6 items-center justify-center rounded-full text-mute transition-colors hover:bg-white/80 hover:text-ink"
+      >
+        <InfoIcon size={14} />
+      </button>
+      <span
+        id={id}
+        role="tooltip"
+        className={`pointer-events-none invisible absolute top-7 z-40 w-60 rounded-lg bg-ink px-3 py-2 text-[11px] font-normal normal-case leading-relaxed tracking-normal text-white opacity-0 shadow-lg transition-opacity duration-200 group-focus-within/tip:visible group-focus-within/tip:opacity-100 group-hover/tip:visible group-hover/tip:opacity-100 ${
+          align === "right" ? "right-0" : "left-0"
+        }`}
+      >
+        {children}
+      </span>
+    </span>
   );
 }
 

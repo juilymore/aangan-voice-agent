@@ -44,7 +44,7 @@ function suggestFor(call: CallRow, kind: string, field: string, ai: unknown, hum
       }
       if (decidedBy === "budget") {
         const to = Math.max(0.1, Math.round((s.budgetFailRatio - 0.1) * 10) / 10);
-        return { type: "set_rule", field: "budgetFailRatio", to, label: `Be gentler on low budgets (fail below ${Math.round(to * 100)}% of the floor instead of ${Math.round(s.budgetFailRatio * 100)}%)` };
+        return { type: "set_rule", field: "budgetFailRatio", to, label: "Be gentler on volunteered budgets that look low (owner can see the exact threshold on the Rubric tab)" };
       }
       if (decidedBy === "timeline") {
         const to = Math.max(1, s.minWeeksToCompletion - 1);
@@ -137,7 +137,8 @@ export async function applySuggestion(id: string, actor: string): Promise<{ ok: 
   if (sug?.type === "add_area_pass") {
     res = await saveSettings(
       "rules",
-      { areaPassTerms: [...new Set([...s.areaPassTerms, sug.term])], areaFailTerms: s.areaFailTerms.filter((t) => t !== sug.term) },
+      // Also drop any broader fail term that would still catch this place (e.g. "talegaon" for "talegaon dabhade").
+      { areaPassTerms: [...new Set([...s.areaPassTerms, sug.term])], areaFailTerms: s.areaFailTerms.filter((t) => t !== sug.term && !` ${sug.term} `.includes(` ${t}`)) },
       actor,
       `Learned from a correction: ${sug.label}`,
     );
@@ -191,7 +192,7 @@ async function hasManualOverride(callId: string, field: "qualification" | "tempe
 export async function reevaluateCall(callId: string, s?: RuleSettings) {
   const settings = s ?? (await getRuleSettings());
   const [call] = await db().select().from(schema.calls).where(eq(schema.calls.id, callId));
-  if (!call?.extracted || !call.startedAt) return { changed: false };
+  if (!call?.extracted || !call.startedAt) return { changed: false, from: call?.qualification ?? null, to: call?.qualification ?? null, temperatureFrom: call?.temperature ?? null, temperatureTo: call?.temperature ?? null };
   const [booking] = await db()
     .select()
     .from(schema.bookings)
@@ -231,7 +232,7 @@ export async function reevaluateCall(callId: string, s?: RuleSettings) {
     await db().insert(schema.callAudit).values({ callId: call.id, actor: "Rubric update", field: "qualification", oldValue: call.qualification, newValue: qualification, reason: "Re-checked with the updated rubric" });
     if (!call.isTest) await onCallChanged(call.id, { kind: "qualification", from: call.qualification, to: qualification!, reason: "Re-checked with the updated rubric" }, "Rubric update");
   }
-  return { changed, from: call.qualification, to: qualification };
+  return { changed, from: call.qualification, to: qualification, temperatureFrom: call.temperature, temperatureTo: temperature };
 }
 
 /** Re-checks every processed call against the current rubric. Manual overrides are kept. */

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { currentPersona } from "@/lib/persona";
 import { getCallDetail, listDesigners, designerName, type AuditRow, type DesignerOption } from "@/lib/data/calls";
 import {
   formatDateTime,
@@ -16,7 +17,10 @@ import {
   QUALIFICATION_LABELS,
   TEMPERATURE_LABELS,
   auditFieldLabel,
+  CALL_CATEGORIES,
+  callCategory,
   callTypeLabel,
+  promisedLine,
   complianceLabel,
   criterionLabel,
   decidedByLabel,
@@ -26,8 +30,8 @@ import {
   outcomeStageLabel,
   syncKindLabel,
 } from "@/lib/data/labels";
-import type { KeyFact } from "@/lib/types/call-json";
-import { ComplianceChip, DemoChip, FlagChip, OutcomeChip, ReasonChip, StatusDot, TemperatureChip } from "@/components/chips";
+import { EXTRACT_FIELDS, type ExtractField, type KeyFact } from "@/lib/types/call-json";
+import { CallTypeChip, ComplianceChip, DemoChip, FlagChip, OutcomeChip, ReasonChip, StatusDot, TemperatureChip } from "@/components/chips";
 import { EmptyState, Eyebrow, GlassCard, SectionTitle } from "@/components/ui";
 import {
   AlertIcon,
@@ -36,6 +40,7 @@ import {
   CheckIcon,
   ClockIcon,
   GlobeIcon,
+  LightbulbIcon,
   LinkIcon,
   MailIcon,
   MapPinIcon,
@@ -51,6 +56,7 @@ import {
 import {
   CancelBookingForm,
   DesignerForm,
+  FactFix,
   FollowupForm,
   NoteForm,
   OutcomeForm,
@@ -74,7 +80,8 @@ const STATUS_STYLE = {
 
 export default async function CallDetailPage({ params }: PageProps<"/calls/[id]">) {
   const { id } = await params;
-  const [detail, designers] = await Promise.all([getCallDetail(id), listDesigners()]);
+  const [detail, designers, persona] = await Promise.all([getCallDetail(id), listDesigners(), currentPersona()]);
+  const isOwner = persona.role === "owner";
   if (!detail) notFound();
   const { call, linked, bookings, audit, jobs } = detail;
   const now = new Date();
@@ -100,6 +107,8 @@ export default async function CallDetailPage({ params }: PageProps<"/calls/[id]"
   const activeBooking = bookings.find((b) => b.status !== "cancelled");
   const pastBookings = bookings.filter((b) => b !== activeBooking);
   const followupOpen = call.needsFollowup && !call.followupDoneAt;
+  const category = callCategory(call.callType);
+  const clientPromise = followupOpen && (category === "complaint" || category === "client_update") ? promisedLine(call.flags) : null;
   const hasConflict = flags.includes("conflict");
   const turnOk = (t: number | null | undefined): t is number => t != null && t >= 0 && t < transcript.length;
 
@@ -117,7 +126,7 @@ export default async function CallDetailPage({ params }: PageProps<"/calls/[id]"
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <Eyebrow>{callTypeLabel(call.callType)}</Eyebrow>
+              <CallTypeChip type={call.callType} detail />
               {call.isTest && <DemoChip />}
             </div>
             <h1 className="display break-words text-2xl text-ink sm:text-4xl">{call.callerName || "Unknown caller"}</h1>
@@ -169,8 +178,17 @@ export default async function CallDetailPage({ params }: PageProps<"/calls/[id]"
       </GlassCard>
 
       {/* Warnings */}
-      {(hasConflict || compliance.length > 0) && (
+      {(hasConflict || compliance.length > 0 || clientPromise) && (
         <div className="space-y-3">
+          {clientPromise && (
+            <Banner tone={category === "complaint" ? "alert" : "amber"} title={CALL_CATEGORIES[category].label}>
+              <span className="block font-medium text-ink">{clientPromise}</span>
+              <span className="mt-0.5 block text-xs">
+                {call.flags?.includes("after_hours") ? "The call came in after office hours. " : ""}
+                Stays highlighted on Today until someone marks the follow-up done (Actions, on the right).
+              </span>
+            </Banner>
+          )}
           {hasConflict && (
             <Banner tone="amber" title="Booking conflict">
               A consultation was booked on this call, but the rules say it is not qualified. Nothing was cancelled
@@ -209,7 +227,7 @@ export default async function CallDetailPage({ params }: PageProps<"/calls/[id]"
 
             {keyFacts.length > 0 && (
               <div className="mt-6">
-                <Eyebrow className="mb-2">Key facts · tap to see where it was said</Eyebrow>
+                <Eyebrow className="mb-2">Key facts · tap to see where it was said · Fix if misheard</Eyebrow>
                 <ul className="grid gap-2 sm:grid-cols-2">
                   {keyFacts.map((f, i) => {
                     const inner = (
@@ -233,10 +251,19 @@ export default async function CallDetailPage({ params }: PageProps<"/calls/[id]"
                         ) : (
                           <div className="rounded-xl border border-white/70 bg-white/40 px-3 py-2.5">{inner}</div>
                         )}
+                        {FACT_FIELD_BY_LABEL[f.label] && (
+                          <FactFix
+                            callId={call.id}
+                            field={FACT_FIELD_BY_LABEL[f.label]}
+                            label={f.label}
+                            value={String(call.extracted?.fields[FACT_FIELD_BY_LABEL[f.label]]?.value ?? f.value)}
+                          />
+                        )}
                       </li>
                     );
                   })}
                 </ul>
+                <HowItLearns className="mt-2" />
               </div>
             )}
 
@@ -495,6 +522,7 @@ export default async function CallDetailPage({ params }: PageProps<"/calls/[id]"
                   callId={call.id}
                   current={call.qualification}
                   options={Object.entries(QUALIFICATION_LABELS).map(([value, v]) => ({ value, label: v.label }))}
+                  isOwner={isOwner}
                 />
               </Control>
               <Control title="Temperature" summary={call.temperature ? TEMPERATURE_LABELS[call.temperature]?.label : "—"}>
@@ -502,8 +530,10 @@ export default async function CallDetailPage({ params }: PageProps<"/calls/[id]"
                   callId={call.id}
                   current={call.temperature}
                   options={Object.entries(TEMPERATURE_LABELS).map(([value, v]) => ({ value, label: v.label }))}
+                  isOwner={isOwner}
                 />
               </Control>
+              <HowItLearns />
               <Control title="Designer" summary={designerName(designers, call.assignedDesigner) ?? "Unassigned"}>
                 <DesignerForm
                   callId={call.id}
@@ -598,6 +628,35 @@ export default async function CallDetailPage({ params }: PageProps<"/calls/[id]"
   );
 }
 
+/** The honest model, in one line. */
+function HowItLearns({ className = "" }: { className?: string }) {
+  return (
+    <p className={`flex items-start gap-2 rounded-lg px-1 py-1.5 text-[11px] leading-relaxed text-mute ${className}`}>
+      <LightbulbIcon size={13} className="mt-0.5 shrink-0" />
+      <span>
+        Decisions come from the studio&apos;s <Link href="/rubric" className="underline underline-offset-2 hover:text-ink">rubric</Link>, not
+        the AI. Fixed facts teach the AI to read calls better; verdict corrections become suggested rubric changes.
+      </span>
+    </p>
+  );
+}
+
+/** Key facts in the brief carry a label; map it back to the extracted field so it can be fixed. */
+const FACT_FIELD_BY_LABEL: Record<string, ExtractField> = {
+  ...(Object.fromEntries(EXTRACT_FIELDS.map((f) => [humanize(f), f])) as Record<string, ExtractField>),
+  Location: "locality",
+  "Society / building": "society",
+  Size: "bhk",
+  "Carpet area": "size_sqft",
+  "Property now": "property_state",
+  Scope: "scope",
+  Rooms: "rooms_count",
+  Timing: "timeline_text",
+  Referral: "referral_source",
+  "Preferred meeting": "consultation_mode",
+
+};
+
 function Meta({ icon: Icon, label, value }: { icon: typeof ClockIcon; label: string; value: string }) {
   return (
     <div>
@@ -668,7 +727,18 @@ function describeAudit(a: AuditRow, designers: DesignerOption[]): string {
     }
     case "booking_cancelled":
       return "Consultation cancelled";
+    case "teach_ai": {
+      const n = (v ?? {}) as { kind?: string; value?: string; suggestion?: string };
+      const map = n.kind === "temperature" ? TEMPERATURE_LABELS : QUALIFICATION_LABELS;
+      return `Marked the AI's ${n.kind === "temperature" ? "temperature" : "verdict"} wrong: ${lbl(map, o)} → ${lbl(map, n.value)}${
+        n.suggestion ? ` · ${n.suggestion}` : ""
+      }`;
+    }
     default:
+      if (a.field.startsWith("fact:")) {
+        const show = (x: unknown) => (x == null || x === "" ? "not heard" : String(x));
+        return `${show(o)} → ${show(v)}`;
+      }
       if (typeof v === "string") return v;
       return v == null ? "" : JSON.stringify(v).slice(0, 200);
   }

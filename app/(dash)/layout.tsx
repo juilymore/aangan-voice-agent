@@ -32,6 +32,7 @@ export default async function DashLayout({ children }: { children: React.ReactNo
           <nav aria-label="Main" className="order-3 flex w-full items-center gap-6 sm:order-none sm:w-auto">
             <NavLink href="/">Today</NavLink>
             <NavLink href="/calls">Calls</NavLink>
+            <NavLink href="/rubric">Rubric</NavLink>
             {persona.role === "owner" && <NavLink href="/metrics">Metrics</NavLink>}
           </nav>
           <div className="ml-auto">

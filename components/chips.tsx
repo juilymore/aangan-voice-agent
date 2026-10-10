@@ -1,6 +1,9 @@
 import {
   QUALIFICATION_LABELS,
   TEMPERATURE_LABELS,
+  CALL_CATEGORIES,
+  callCategory,
+  callTypeLabel,
   complianceLabel,
   flagLabel,
   type Tone,
@@ -95,4 +98,27 @@ export function StatusDot({ status }: { status: string | null | undefined }) {
         ? "bg-alert"
         : "bg-slate-300";
   return <span className={`inline-block size-2 shrink-0 rounded-full ${cls}`} aria-hidden="true" />;
+}
+
+const CATEGORY_DOT: Record<string, string> = {
+  lead: "bg-sage",
+  client_update: "bg-amber",
+  complaint: "bg-alert",
+  other: "bg-slate-400",
+};
+
+/**
+ * The call's category (Lead / Client update / Complaint / Other) as a coloured chip.
+ * For "Other" the specific type is shown (Reschedule, Wrong number, Dropped call…).
+ */
+export function CallTypeChip({ type, detail = false }: { type: string | null | undefined; detail?: boolean }) {
+  const cat = callCategory(type);
+  const c = CALL_CATEGORIES[cat];
+  const text = cat === "other" || detail ? callTypeLabel(type) : c.short;
+  return (
+    <Chip tone={c.tone} title={`${c.label}: ${c.hint}`}>
+      <span className={`size-1.5 rounded-full ${CATEGORY_DOT[cat]}`} aria-hidden="true" />
+      {type ? text : "Processing"}
+    </Chip>
+  );
 }

@@ -2,13 +2,15 @@
 // Designer edits from the dashboard. Every edit: save the change, write call_audit (actor = persona name),
 // then call onCallChanged so the integration layer can sync it (lib/sync/hooks.ts).
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { currentPersona } from "@/lib/persona";
 import { onCallChanged, retrySync, type CallChange } from "@/lib/sync/hooks";
 import { UUID_RE } from "@/lib/data/calls";
 import { parseIstLocal } from "@/lib/data/format";
-import type { QualificationReasons } from "@/lib/types/call-json";
+import { EXTRACT_FIELDS, type ExtractField, type QualificationReasons } from "@/lib/types/call-json";
+import { recordCorrection, updateFact } from "@/lib/learning";
+import { QUALIFICATION_LABELS } from "@/lib/data/labels";
 
 const { calls, bookings, callAudit, designers, syncJobs } = schema;
 
@@ -67,7 +69,7 @@ async function notify(callId: string, change: CallChange, actor: string, okMessa
   }
 }
 
-export async function changeQualification(_: ActionState, fd: FormData): Promise<ActionState> {
+export async function changeQualification(_: TeachState, fd: FormData): Promise<TeachState> {
   const { name: actor } = await currentPersona();
   const call = await loadCall(str(fd, "callId"));
   if (!call) return fail("Call not found.");
@@ -80,6 +82,8 @@ export async function changeQualification(_: ActionState, fd: FormData): Promise
   const reasons: QualificationReasons | null = call.qualificationReasons
     ? { ...call.qualificationReasons, overriddenBy: { actor, at: at.toISOString(), reason } }
     : null;
+  const wantsTeach = str(fd, "teach") === "1";
+  const aiValue = wantsTeach ? await originalValue(call.id, "qualification", call.qualification) : null;
   await db().transaction(async (tx) => {
     await tx
       .update(calls)
@@ -87,24 +91,155 @@ export async function changeQualification(_: ActionState, fd: FormData): Promise
       .where(eq(calls.id, call.id));
     await audit(tx, call.id, actor, "qualification", call.qualification, to, reason);
   });
-  return notify(call.id, { kind: "qualification", from: call.qualification, to, reason }, actor, "Qualification updated.");
+  const learned = wantsTeach ? await teach(call.id, "qualification", aiValue, to, reason, actor) : null;
+  const res = await notify(
+    call.id,
+    { kind: "qualification", from: call.qualification, to, reason },
+    actor,
+    "Qualification updated.",
+  );
+  return withLearned(res, learned, wantsTeach);
 }
 
-export async function changeTemperature(_: ActionState, fd: FormData): Promise<ActionState> {
+export async function changeTemperature(_: TeachState, fd: FormData): Promise<TeachState> {
   const { name: actor } = await currentPersona();
   const call = await loadCall(str(fd, "callId"));
   if (!call) return fail("Call not found.");
   const to = str(fd, "temperature");
+  const reason = str(fd, "reason");
+  const wantsTeach = str(fd, "teach") === "1";
   if (!TEMPERATURES.includes(to as (typeof TEMPERATURES)[number])) return fail("Pick a temperature.");
   if (to === call.temperature) return fail("That is already the temperature.");
+  if (wantsTeach && reason.length < 3) return fail("Add a short reason so the AI can learn from it.");
+  const aiValue = wantsTeach ? await originalValue(call.id, "temperature", call.temperature) : null;
   await db().transaction(async (tx) => {
     await tx
       .update(calls)
       .set({ temperature: to as (typeof TEMPERATURES)[number], updatedAt: new Date() })
       .where(eq(calls.id, call.id));
-    await audit(tx, call.id, actor, "temperature", call.temperature, to, str(fd, "reason"));
+    await audit(tx, call.id, actor, "temperature", call.temperature, to, reason);
   });
-  return notify(call.id, { kind: "temperature", from: call.temperature, to }, actor, "Temperature updated.");
+  const learned = wantsTeach ? await teach(call.id, "temperature", aiValue, to, reason, actor) : null;
+  const res = await notify(call.id, { kind: "temperature", from: call.temperature, to }, actor, "Temperature updated.");
+  return withLearned(res, learned, wantsTeach);
+}
+
+// ---------------------------------------------------------------- "Teach the AI"
+
+export type Learned = { id: string; label: string; applicable: boolean };
+export type TeachState = { ok: boolean; message: string; at?: number; learned?: Learned | null } | null;
+
+const APPLICABLE = ["add_area_pass", "add_area_fail", "set_rule"];
+
+/** The value the system first decided (before any human change), from the earliest audit row. */
+async function originalValue(callId: string, field: string, current: unknown): Promise<unknown> {
+  const [first] = await db()
+    .select({ old: callAudit.oldValue })
+    .from(callAudit)
+    .where(and(eq(callAudit.callId, callId), eq(callAudit.field, field)))
+    .orderBy(asc(callAudit.at))
+    .limit(1);
+  return first ? first.old : current;
+}
+
+async function teach(
+  callId: string,
+  kind: "qualification" | "temperature",
+  aiValue: unknown,
+  humanValue: string,
+  reason: string,
+  actor: string,
+): Promise<Learned | null> {
+  try {
+    const { id, suggestion } = await recordCorrection({
+      callId,
+      kind,
+      field: kind,
+      aiValue,
+      humanValue,
+      reason: reason || null,
+      actor,
+    });
+    const { role } = await currentPersona();
+    const label = publicLabel(suggestion, role === "owner");
+    await db()
+      .insert(callAudit)
+      .values({
+        callId,
+        actor,
+        field: "teach_ai",
+        oldValue: (aiValue ?? null) as object | null,
+        newValue: { kind, value: humanValue, correctionId: id, suggestion: publicLabel(suggestion, false) },
+        reason: reason || null,
+      });
+    revalidatePath("/rubric");
+    revalidatePath(`/calls/${callId}`);
+    return { id, label, applicable: APPLICABLE.includes(suggestion.type) };
+  } catch (err) {
+    console.error("recordCorrection failed", err);
+    return null;
+  }
+}
+
+function withLearned(res: ActionState, learned: Learned | null, wanted: boolean): TeachState {
+  if (!res || !wanted) return res;
+  if (!learned) return { ...res, message: `${res.message} Could not record the lesson for the AI; try again.` };
+  return { ...res, message: `${res.message} Learned.`, learned };
+}
+
+const NUMERIC_FACTS: readonly string[] = ["size_sqft", "bhk", "rooms_count", "budget_max_inr", "start_in_days"];
+const BOOLEAN_FACTS: readonly string[] = [
+  "prefers_human",
+  "refused_questions",
+  "recording_objection",
+  "price_asked",
+  "reschedule_request",
+  "structural_request",
+  "consult_intent",
+  "urgent",
+  "commitment",
+  "exploring",
+  "price_only",
+  "no_rush_to_decide",
+];
+
+const qLabel = (v: unknown) => (typeof v === "string" ? (QUALIFICATION_LABELS[v]?.label ?? v) : "not set").toLowerCase();
+
+/** "Fix" on a key fact: saves the corrected value (and an AI reading example) and re-checks the call. */
+export async function fixFact(_: ActionState, fd: FormData): Promise<ActionState> {
+  const { name: actor } = await currentPersona();
+  const call = await loadCall(str(fd, "callId"));
+  if (!call) return fail("Call not found.");
+  const field = str(fd, "field");
+  if (!(EXTRACT_FIELDS as readonly string[]).includes(field)) return fail("This fact can't be edited.");
+  const raw = str(fd, "value");
+  const note = str(fd, "note").slice(0, 500);
+  if (!raw) return fail("Enter the correct value.");
+  if (raw.length > 200) return fail("Keep it under 200 characters.");
+  let value: string | number | boolean = raw;
+  if (NUMERIC_FACTS.includes(field)) {
+    const n = Number(raw.replace(/[₹,\s]/g, ""));
+    if (!Number.isFinite(n) || n < 0) return fail("Enter a number.");
+    value = n;
+  } else if (BOOLEAN_FACTS.includes(field)) {
+    if (!/^(true|false|yes|no)$/i.test(raw)) return fail("Enter yes or no.");
+    value = /^(true|yes)$/i.test(raw);
+  }
+  const current = call.extracted?.fields[field as ExtractField]?.value;
+  if (current != null && String(current).toLowerCase() === String(value).toLowerCase()) return fail("That is already the value.");
+  let r: { changed: boolean; from?: unknown; to?: unknown };
+  try {
+    r = await updateFact(call.id, field as ExtractField, value, actor, note || undefined);
+  } catch (err) {
+    console.error("updateFact failed", err);
+    return fail("Could not save the fact.");
+  }
+  revalidatePath(`/calls/${call.id}`);
+  revalidatePath("/");
+  revalidatePath("/calls");
+  revalidatePath("/rubric");
+  if (r.from !== undefined && r.from !== r.to) return done(`Saved. Verdict changed: ${qLabel(r.from)} → ${qLabel(r.to)}.`);
+  return done(r.changed ? "Saved. Verdict unchanged; temperature re-rated." : "Saved. Verdict unchanged.");
 }
 
 export async function reassignDesigner(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -289,4 +424,11 @@ export async function retrySyncJob(_: ActionState, fd: FormData): Promise<Action
     if (job.callId) revalidatePath(`/calls/${job.callId}`);
   }
   return done("Retry started.");
+}
+
+/** Budget suggestions mention the internal pricing ratio: designers see a plain version. */
+function publicLabel(s: { type: string; label: string; field?: string }, isOwner: boolean): string {
+  if (!isOwner && s.type === "set_rule" && s.field === "budgetFailRatio")
+    return "Be gentler on low budgets (details on the Rubric tab)";
+  return s.label;
 }

@@ -96,11 +96,17 @@ export class VaaniAdapter implements VoiceProvider {
 
   parseCallEvent(envelope: unknown): NormalizedCall | null {
     if (!isObj(envelope)) return null;
-    const type = envelope.type;
-    if (type !== "call.completed" && type !== "call.failed") return null;
-    const data = isObj(envelope.data) ? envelope.data : {};
+    // API webhooks use call.completed / call.failed; dashboard agent webhooks use names like
+    // "Call Post-Processing" / call_post_processing. Accept both; ignore progress events (ringing, started).
+    const type = String(envelope.type ?? envelope.event ?? envelope.event_type ?? envelope.eventType ?? "");
+    const t = type.toLowerCase().replace(/[^a-z]/g, "");
+    const isFailed = t.includes("fail");
+    const isDone = isFailed || t.includes("postprocess") || t.includes("completed") || t === "callended";
+    if (type && !isDone) return null;
+    const data = isObj(envelope.data) ? envelope.data : isObj(envelope.payload) ? envelope.payload : isObj(envelope.call) ? envelope.call : envelope;
+    if (!type && !pick(data, ["transcript", "turns", "messages", "conversation"])) return null;
 
-    const id = pick(data, ["call_id", "callId", "session_id", "sessionId", "id"]);
+    const id = pick(data, ["call_id", "callId", "session_id", "sessionId", "room_name", "roomName", "conversation_id", "id"]);
     if (typeof id !== "string" && typeof id !== "number") return null;
 
     const startedAt = toDate(pick(data, ["started_at", "startedAt", "start_time"]));
@@ -114,10 +120,10 @@ export class VaaniAdapter implements VoiceProvider {
           : null;
 
     const rawStatus = String(pick(data, ["status", "end_reason", "disconnect_reason"]) ?? "").toLowerCase();
-    let status: CallStatus = type === "call.failed" ? "failed" : "completed";
+    let status: CallStatus = isFailed ? "failed" : "completed";
     if (/drop|disconnect|hangup|abandon/.test(rawStatus)) status = "dropped";
 
-    const number = pick(data, ["caller_number", "from", "from_number", "phone", "customer_number"]);
+    const number = pick(data, ["caller_number", "from", "from_number", "phone", "phone_number", "customer_number", "user_number"]);
     const lang = pick(data, ["language", "lang", "locale"]);
 
     return {

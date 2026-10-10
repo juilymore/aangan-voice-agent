@@ -83,3 +83,15 @@ describe("mock providers", () => {
     expect(mail.sent).toHaveLength(1);
   });
 });
+
+describe("Vaani dashboard agent-webhook events", () => {
+  const a = new VaaniAdapter("s");
+  it("accepts post-processing events with a flat payload", () => {
+    const c = a.parseCallEvent({ event: "call_post_processing", call_id: "abc", transcript: [{ role: "assistant", content: "Hello" }, { role: "user", content: "Hi" }] });
+    expect(c?.providerCallId).toBe("abc");
+    expect(c?.transcript).toHaveLength(2);
+  });
+  it("ignores progress events like ringing", () => {
+    expect(a.parseCallEvent({ event: "call_ringing", call_id: "abc" })).toBeNull();
+  });
+});

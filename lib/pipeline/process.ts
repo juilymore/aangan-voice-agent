@@ -34,9 +34,18 @@ export async function ingestVaaniEvent(rawBody: string, headers: Headers, d: Dep
   } catch {
     payload = { unparsable: rawBody.slice(0, 2000) };
   }
+  // When a signature fails, record which headers arrived and the SHAPE of any signature-like value
+  // (never the value itself), so a different signing format can be diagnosed from the dashboard/DB.
+  let diag: string | null = null;
+  if (!check.ok) {
+    const sigHeaders = [...headers.entries()]
+      .filter(([k]) => /sig|hmac|secret|token|auth|timestamp|webhook|vaani/i.test(k))
+      .map(([k, v]) => `${k}=${v.replace(/[0-9a-f]{16,}/gi, "<hex>").replace(/[A-Za-z0-9+/=_-]{24,}/g, "<b64>").slice(0, 60)}`);
+    diag = `signature invalid; headers: ${[...headers.keys()].join(",")}; signature-like: ${sigHeaders.join(" | ") || "none"}`;
+  }
   const [row] = await db()
     .insert(schema.rawEvents)
-    .values({ source: "vaani", eventId: check.eventId, signatureOk: check.ok, payload: payload as object })
+    .values({ source: "vaani", eventId: check.eventId ?? (check.ok ? null : `unsigned-${Date.now()}`), signatureOk: check.ok, payload: payload as object, error: diag })
     .onConflictDoNothing()
     .returning({ id: schema.rawEvents.id });
   return { ok: check.ok, rawEventId: row?.id ?? null, duplicate: !row, eventType: check.eventType };

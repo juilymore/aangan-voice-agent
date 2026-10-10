@@ -18,3 +18,9 @@ export async function onCallChanged(callId: string, change: CallChange, actor: s
   const { enqueueForChange } = await import("./jobs");
   await enqueueForChange(callId, change, actor);
 }
+
+/** "Retry" button on a failed or dead sync job: resets it and runs it now. */
+export async function retrySync(jobId: string): Promise<void> {
+  const { retryJob } = await import("./jobs");
+  await retryJob(jobId);
+}

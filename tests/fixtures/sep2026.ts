@@ -33,7 +33,7 @@ export const FIXTURES: Fixture[] = [
   { id: "T06", channel: "phone", evidence: "office space in Baner. About 800 sq ft... operational by December",
     input: { today: "2026-09-05", propertyKind: "commercial", locality: "Baner", sizeSqft: 800, scope: "full_home", ...full, completionBy: "2026-12-01", startInDays: 14, decisionMaker: "self", consultIntent: true },
     expect: { outcome: "qualified", temperature: "hot", decidedBy: "all_pass", flags: ["tight_timeline"] } },
-  { id: "T07", channel: "phone", evidence: "redo my living room and kitchen before Diwali (three weeks away)",
+  { id: "T07", channel: "phone", evidence: "I want to redo my living room and kitchen before Diwali",
     input: { today: "2026-09-08", propertyKind: "residential", scope: "partial", roomsCount: 2, ...full, completionBy: "2026-09-29", laterDateOffered: true },
     expect: { outcome: "not_qualified", temperature: "cold", decidedBy: "timeline" } },
   { id: "T08", channel: "phone", evidence: "Missed call. No voicemail.",
@@ -136,7 +136,7 @@ export const FIXTURES: Fixture[] = [
   { id: "F09", channel: "form", evidence: "Ready to book a consultation at your earliest availability",
     input: { today: "2026-09-20", propertyKind: "residential", locality: "Kondhwa, Pune", sizeSqft: 1150, bhk: 3, scope: "full_home", ...full, completionBy: "2027-03-31", referral: true, consultIntent: true },
     expect: { outcome: "qualified", temperature: "hot", decidedBy: "all_pass" } },
-  { id: "F10", channel: "form", evidence: "Ready to start immediately. Budget: 18-22 lakh",
+  { id: "F10", channel: "form", evidence: "Ready to start immediately",
     input: { today: "2026-09-26", propertyKind: "residential", locality: "Aundh, Pune", sizeSqft: 1300, bhk: 3, scope: "full_home", ...full, startInDays: 0, urgent: true, commitment: true, budgetMaxInr: 2_200_000, budgetMentioned: true },
     expect: { outcome: "qualified", temperature: "warm", decidedBy: "all_pass", flags: ["budget_tight"] } },
 ];

@@ -15,7 +15,9 @@
     "rules:report": "tsx --conditions=react-server scripts/rules-report.ts",
     "eval:gemini": "tsx --conditions=react-server scripts/eval-gemini.mts",
     "test:fixtures": "vitest run tests/pipeline.test.ts tests/rules.test.ts",
-    "demo:seed": "tsx --conditions=react-server scripts/demo-seed.mts"
+    "demo:seed": "tsx --conditions=react-server scripts/demo-seed.mts",
+    "erase-caller": "tsx --conditions=react-server scripts/erase-caller.mts",
+    "hubspot:setup": "tsx scripts/hubspot-setup.mts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

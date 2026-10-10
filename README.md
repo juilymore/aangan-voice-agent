@@ -1,5 +1,7 @@
 # Aangan Voice Agent
 
+**Live:** https://aangan-voice-agent-tawny.vercel.app · **Repo:** github.com/juilymore/aangan-voice-agent (private) · Deploys automatically from `main` (Git → Vercel only).
+
 An AI phone assistant for Aangan Studio, Pune. It answers every enquiry call at any hour, checks fit against Nikhil's rubric and books consultations with Ruhi or Jay on one shared calendar. Every call then becomes a designer brief, an email, a HubSpot deal and a record on a studio-style dashboard.
 
 ```
@@ -61,6 +63,11 @@ The responses are flat JSON. Use "Store Fields as Variables" for `decision`, `as
 In Vaani: **Developers → Webhooks**. Add URL `https://<app>/api/webhooks/vaani` with events **call.completed** and **call.failed**. Copy the `vv_whk_…` secret into `VAANI_WEBHOOK_SECRET` (Vercel and `.env.local`), set `MOCK_VOICE=false`, then redeploy. Make one test call. If processing fails, check that payload under `raw_events` and adjust `lib/voice/vaani-adapter.ts` (`parseCallEvent`) to the real field names.
 
 ### 4. Shared Google Calendar
+**Easiest (in use): iCal feeds, no Google Cloud.**
+1. Google Calendar → Settings → the studio calendar → **Integrate calendar** → copy **Secret address in iCal format**. Put it in `GOOGLE_ICS_URL` in `.env.local` and in Vercel (Settings → Environment Variables), then push any commit to redeploy. Busy times, including bookings made through the Google appointment page, are then never offered to callers.
+2. Google Calendar → **Other calendars → + → From URL** → paste the `CALENDAR_FEED_URL` noted at the bottom of `.env.local`. Consultations booked by the phone agent then appear in Google Calendar (Google refreshes subscribed calendars every few hours; the dashboard is always live).
+
+**Alternative (instant two-way): Google service account**
 1. In Google Cloud: create a project, enable the **Google Calendar API**, create a **service account**, and download its JSON key.
 2. In Google Calendar: create "Aangan – Consultations". Open **Settings → Share with specific people**, add the service account email, and give it **Make changes to events**.
 3. Set `GOOGLE_SERVICE_ACCOUNT_B64` (base64 of the JSON file) and `GOOGLE_CALENDAR_ID` (shown under "Integrate calendar"), then set `MOCK_CALENDAR=false`.

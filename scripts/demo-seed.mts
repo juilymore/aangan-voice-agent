@@ -113,6 +113,78 @@ for (const f of FIXTURES) {
   process.stdout.write(".");
 }
 
+// Three extra, clearly synthetic demo calls showing the other call types (not from the September PDF).
+const extra: { id: string; at: string; dur: number; name: string; turns: [string, string][]; fields: Record<string, { value: string; quote: string }> }[] = [
+  {
+    id: "X1-update",
+    at: "2026-10-09T15:40:00Z", // 9:10 pm IST, after hours
+    dur: 140,
+    name: "Rohan Kulkarni",
+    turns: [
+      ["agent", "Hello, thank you for calling Aangan Studio. I'm the studio's AI assistant, and this call is recorded. How can I help you today?"],
+      ["caller", "Hi, I'm Rohan Kulkarni. Ruhi is doing our flat in Baner. I wanted to know when the wardrobes will be delivered."],
+      ["agent", "Sure, I'll note this down and get back to you. Which area is the project in?"],
+      ["caller", "Baner, Sai Siddhi society."],
+      ["agent", "Thank you. I've noted it, and your designer or someone from our team will get back to you during office hours."],
+    ],
+    fields: {
+      caller_name: { value: "Rohan Kulkarni", quote: "I'm Rohan Kulkarni" },
+      call_type: { value: "followup_update", quote: "I wanted to know when the wardrobes will be delivered" },
+      locality: { value: "Baner", quote: "Baner, Sai Siddhi society" },
+      society: { value: "Sai Siddhi", quote: "Baner, Sai Siddhi society" },
+      existing_client_details: { value: "Designer Ruhi; Baner flat; asking when the wardrobes will be delivered", quote: "Ruhi is doing our flat in Baner" },
+    },
+  },
+  {
+    id: "X2-wrong",
+    at: "2026-10-09T08:15:00Z",
+    dur: 35,
+    name: "Unknown",
+    turns: [
+      ["agent", "Hello, thank you for calling Aangan Studio. I'm the studio's AI assistant, and this call is recorded. How can I help you today?"],
+      ["caller", "Oh, is this not the tiles showroom? Sorry, wrong number."],
+      ["agent", "No problem at all. Have a good day."],
+    ],
+    fields: { call_type: { value: "wrong_number", quote: "Sorry, wrong number" } },
+  },
+  {
+    id: "X3-complaint",
+    at: "2026-10-09T16:20:00Z", // 9:50 pm IST
+    dur: 210,
+    name: "Meera Iyer",
+    turns: [
+      ["agent", "Hello, thank you for calling Aangan Studio. I'm the studio's AI assistant, and this call is recorded. How can I help you today?"],
+      ["caller", "This is Meera Iyer. The carpenter left our kitchen half done in Aundh and nobody has come for a week. Jay is our designer."],
+      ["agent", "I'm really sorry about this. That's not the experience we want you to have. I've noted everything, and I'm passing it to the studio head. Someone from our team will reach out to you during office hours."],
+    ],
+    fields: {
+      caller_name: { value: "Meera Iyer", quote: "This is Meera Iyer" },
+      call_type: { value: "existing_client_issue", quote: "nobody has come for a week" },
+      locality: { value: "Aundh", quote: "half done in Aundh" },
+      tone: { value: "frustrated", quote: "nobody has come for a week" },
+      existing_client_details: { value: "Designer Jay; Aundh kitchen left half done; nobody has come for a week", quote: "The carpenter left our kitchen half done in Aundh" },
+    },
+  },
+];
+for (const [k, x] of extra.entries()) {
+  const llm = new MockLlmProvider();
+  llm.fallback = JSON.stringify({ fields: x.fields });
+  const start = new Date(x.at);
+  await processCall(
+    {
+      providerCallId: `demo-${x.id}`,
+      startedAt: start,
+      endedAt: new Date(start.getTime() + x.dur * 1000),
+      durationSec: x.dur,
+      callerNumber: number(100 + k),
+      status: "completed",
+      language: "en",
+      transcript: x.turns.map(([role, text]) => ({ role: role as "agent" | "caller", text })),
+    },
+    { deps: mockDeps(llm), isTest: true },
+  );
+}
+
 // The demo calls happened in September, so give their designer emails a realistic "about a minute
 // after the call ended" timestamp instead of today's seeding time.
 await conn.execute(

@@ -26,6 +26,10 @@ const schema = z.object({
   // Google Calendar (service account JSON, base64)
   GOOGLE_SERVICE_ACCOUNT_B64: z.string().optional(),
   GOOGLE_CALENDAR_ID: z.string().optional(), // the ONE shared studio calendar
+  // Simpler alternative (no Google Cloud): read busy times from the calendar's secret iCal address,
+  // and publish bookings at /api/calendar/<CALENDAR_FEED_TOKEN> for Google Calendar to subscribe to.
+  GOOGLE_ICS_URL: z.string().url().optional(),
+  CALENDAR_FEED_TOKEN: z.string().min(16).optional(),
 
   // Gemini
   GEMINI_API_KEY: z.string().optional(),

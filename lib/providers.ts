@@ -1,6 +1,7 @@
 import "server-only";
 import { env } from "@/lib/env";
 import { GoogleCalendarProvider } from "@/lib/calendar/google";
+import { IcsCalendarProvider } from "@/lib/calendar/ics";
 import { MockCalendarProvider } from "@/lib/calendar/mock";
 import type { CalendarProvider } from "@/lib/calendar/types";
 import { MockVoiceProvider } from "@/lib/voice/mock";
@@ -31,10 +32,13 @@ export function deps(): Deps {
   const e = env();
   cached = {
     voice: e.MOCK_VOICE ? new MockVoiceProvider() : new VaaniAdapter(e.VAANI_WEBHOOK_SECRET),
-    calendar:
-      !e.MOCK_CALENDAR && e.GOOGLE_SERVICE_ACCOUNT_B64 && e.GOOGLE_CALENDAR_ID
+    // Google API if a service account is set; otherwise iCal feeds (works with or without GOOGLE_ICS_URL,
+    // since bookings in our database always block their slots).
+    calendar: e.MOCK_CALENDAR
+      ? new MockCalendarProvider()
+      : e.GOOGLE_SERVICE_ACCOUNT_B64 && e.GOOGLE_CALENDAR_ID
         ? new GoogleCalendarProvider(e.GOOGLE_SERVICE_ACCOUNT_B64, e.GOOGLE_CALENDAR_ID)
-        : new MockCalendarProvider(),
+        : new IcsCalendarProvider(e.GOOGLE_ICS_URL ?? null),
     email:
       !e.MOCK_EMAIL && e.RESEND_API_KEY
         ? new ResendEmailProvider(e.RESEND_API_KEY, e.EMAIL_FROM, e.EMAIL_TEST_MODE ? (e.EMAIL_TEST_TO ?? null) : null)

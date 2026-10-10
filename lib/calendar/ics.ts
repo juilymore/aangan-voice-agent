@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import ical from "node-ical";
 import { computeSlots, type Busy } from "./slots";
-import type { BookRequest, CalendarProvider, EventRef, Slot, SlotQuery } from "./types";
+import type { CalendarProvider, EventRef, Slot, SlotQuery } from "./types";
 
 // Calendar via iCal feeds, no Google Cloud project needed:
 //  - READ: the studio's Google Calendar "secret address in iCal format" (GOOGLE_ICS_URL) gives busy
@@ -51,7 +51,7 @@ export class IcsCalendarProvider implements CalendarProvider {
   }
 
   // Bookings live in our database and reach Google through the published feed.
-  async book(_req: BookRequest): Promise<EventRef> {
+  async book(): Promise<EventRef> {
     return { eventId: `aangan-${randomUUID()}` };
   }
   async cancel() {}

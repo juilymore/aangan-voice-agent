@@ -5,7 +5,7 @@ import { db, schema } from "@/lib/db";
 import { env } from "@/lib/env";
 import type { Deps } from "@/lib/providers";
 import { blockMinutes, dayKey, parsePreference } from "@/lib/calendar/slots";
-import { spokenTime } from "@/lib/calendar/spoken";
+import { istParts, spokenTime } from "@/lib/calendar/spoken";
 import type { ConsultMode, Slot } from "@/lib/calendar/types";
 import { evaluate } from "@/lib/rules/engine";
 import { lineFor, type Lang } from "@/lib/rules/lines";
@@ -157,8 +157,59 @@ async function alternatives(mode: ConsultMode, d: Deps) {
   }
 }
 
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const NUMBER_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+
+/**
+ * The agent is told to copy slot_id exactly, but language models sometimes paraphrase it
+ * ("ruhi-thursday-10am"). Resolve such loose ids against the currently open slots; never guess
+ * when it is ambiguous.
+ */
+export async function resolveSlotId(raw: string, mode: ConsultMode, d: Deps): Promise<string | null> {
+  if (/^[a-z0-9_-]+\|\d{4}-\d{2}-\d{2}T/i.test(raw)) return raw; // canonical
+  const s = raw.toLowerCase();
+  const now = new Date();
+  const ctx = await bookingContext(now);
+  const open = await d.calendar.getFreeSlots({ mode, now, limit: 14, ...ctx });
+  const wd = WEEKDAYS.findIndex((w) => s.includes(w) || s.includes(w.slice(0, 3) + " ") || s.includes(w.slice(0, 3) + "-"));
+  // Day-of-month ("15th") is matched first and removed, so it is not mistaken for the hour.
+  const dayNum = s.match(/\b(\d{1,2})(?:st|nd|rd|th)\b/)?.[1];
+  const rest = dayNum ? s.replace(/\b\d{1,2}(?:st|nd|rd|th)\b/, " ") : s;
+  const hm = rest.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m|p\.m)?\b/);
+  let hour: number | null = null;
+  if (hm) {
+    hour = Number(hm[1]);
+    if (hm[3]?.startsWith("p") && hour < 12) hour += 12;
+    if (hm[3]?.startsWith("a") && hour === 12) hour = 0;
+  } else {
+    const w = Object.keys(NUMBER_WORDS).find((k) => new RegExp("\\b" + k + "\\b").test(rest));
+    if (w) hour = NUMBER_WORDS[w];
+  }
+  if (hour != null && hour < 8 && !/am|morning/.test(s)) hour += 12; // 'four' means 16:00 in office hours
+  const match = (list: Slot[]) =>
+    list.filter((x) => {
+      const p = istParts(x.start);
+      return (wd < 0 || p.wd === wd) && (hour == null || p.h === hour) && (!dayNum || p.d === Number(dayNum));
+    });
+  const byDesigner = open.filter((x) => s.includes(x.designer));
+  const hits = match(byDesigner).length ? match(byDesigner) : match(open);
+  if (hits.length !== 1 && !(hits.length > 1 && hits.every((h) => h.start.getTime() === hits[0].start.getTime()))) return null;
+  return hits[0].slotId;
+}
+
 export async function bookConsultation(p: z.infer<typeof BookParams>, callId: string, d: Deps) {
-  const [designer, iso, slotMode] = p.slot_id.split("|");
+  // A real callback number is required before anything is booked.
+  const digits = (p.callback_number ?? "").replace(/\D/g, "");
+  if (digits.length < 10) {
+    return {
+      success: false,
+      error: "need_callback_number",
+      message: "Ask the caller for the best phone number to reach them, read it back to confirm, then call this tool again with the same slot_id and that number. Do not say anything is booked.",
+    };
+  }
+  const requestedMode = (p.mode ?? (p.slot_id.split("|")[2] as ConsultMode | undefined) ?? "site_visit") as ConsultMode;
+  const resolved = await resolveSlotId(p.slot_id, requestedMode === "phone_call" ? "phone_call" : "site_visit", d);
+  const [designer, iso, slotMode] = (resolved ?? p.slot_id).split("|");
   const mode = (p.mode ?? slotMode) as ConsultMode;
   const start = new Date(iso);
   if (!designer || isNaN(start.getTime()) || (mode !== "site_visit" && mode !== "phone_call")) {

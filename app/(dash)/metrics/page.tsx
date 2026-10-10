@@ -78,7 +78,17 @@ export default async function MetricsPage({ searchParams }: PageProps<"/metrics"
         />
         <StatTile
           icon={MailIcon}
-          value={m.medianEmailMinutes == null ? "—" : <><CountUp value={m.medianEmailMinutes} format="dec1" /> min</>}
+          value={
+            m.medianEmailMinutes == null ? (
+              "—"
+            ) : m.medianEmailMinutes < 120 ? (
+              <><CountUp value={m.medianEmailMinutes} format="dec1" /> min</>
+            ) : m.medianEmailMinutes < 48 * 60 ? (
+              <><CountUp value={m.medianEmailMinutes / 60} format="dec1" /> hrs</>
+            ) : (
+              <><CountUp value={m.medianEmailMinutes / 1440} format="dec1" /> days</>
+            )
+          }
           label="Call end → designer email"
           hint={m.emailSamples ? `median of ${m.emailSamples} qualified` : "no emails yet"}
         />

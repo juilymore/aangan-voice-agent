@@ -1,6 +1,25 @@
 // Mock LLM output for the 40 September enquiries: what a correct extraction would return, with
 // verbatim quotes. Used by the fixture tests and the demo seed (no real AI calls).
+import type { TranscriptTurn } from "@/db/schema";
 import type { Fixture } from "./sep2026";
+
+export const REFERRERS: Record<string, string> = {
+  T01: "Shruti Joshi", T05: "Vikram Agarwal", W01: "Sonali Patel", W06: "Ashok Bhosale",
+  F02: "Priya Wadia", F05: "Amey Joshi", F09: "Rohan Lifescapes",
+};
+
+/** A short verbatim window around the first caller turn mentioning the value, else null. */
+function quoteFor(value: string, turns: TranscriptTurn[]): string | null {
+  const v = value.toLowerCase().split(/[,\s]+/).filter((w) => w.length >= 3)[0];
+  if (!v) return null;
+  for (const t of turns) {
+    if (t.role !== "caller") continue;
+    const words = t.text.split(/\s+/);
+    const i = words.findIndex((w) => w.toLowerCase().replace(/[^a-z0-9]/g, "").includes(v.replace(/[^a-z0-9]/g, "")));
+    if (i >= 0) return words.slice(Math.max(0, i - 4), i + 5).join(" ");
+  }
+  return null;
+}
 
 export const NAMES: Record<string, string> = {
   T01: "Priya", T03: "Suresh Patil", T05: "Aarti Mehta", T09: "Sheetal Deshpande", T12: "Anand Sharma",
@@ -13,13 +32,13 @@ export const NAMES: Record<string, string> = {
 
 type Field = { value: string; quote: string } | null;
 
-export function mockExtractionJson(f: Fixture): string {
+export function mockExtractionJson(f: Fixture, transcript: TranscriptTurn[] = []): string {
   const i = f.input;
   const q = f.evidence;
   const fields: Record<string, Field> = {};
-  const set = (k: string, v: unknown, quote = q) => {
+  const set = (k: string, v: unknown, quote?: string) => {
     if (v === undefined || v === null || v === false || v === "unknown") return;
-    fields[k] = { value: String(v), quote };
+    fields[k] = { value: String(v), quote: quote ?? quoteFor(String(v), transcript) ?? q };
   };
   const day = (d: unknown) => (d ? new Date(String(d)).toISOString().slice(0, 10) : null);
 
@@ -28,15 +47,15 @@ export function mockExtractionJson(f: Fixture): string {
   set("property_kind", i.propertyKind);
   set("excluded_use", i.excludedUse);
   set("locality", i.locality);
-  set("size_sqft", i.sizeSqft);
-  set("bhk", i.bhk);
+  set("size_sqft", i.sizeSqft, i.sizeSqft ? (quoteFor(i.sizeSqft.toLocaleString("en-IN"), transcript) ?? quoteFor(String(i.sizeSqft), transcript) ?? undefined) : undefined);
+  set("bhk", i.bhk, i.bhk ? (quoteFor(`${i.bhk}BHK`, transcript) ?? undefined) : undefined);
   set("scope", i.scope);
   set("rooms_count", i.roomsCount);
   set("intent", i.intent);
   set("completion_by", day(i.completionBy));
   if (i.startInDays != null) set("start_in_days", i.startInDays);
   set("decision_maker", i.decisionMaker);
-  if (i.referral) set("referral_source", "a referral");
+  if (i.referral) set("referral_source", REFERRERS[f.id] ?? "a referral");
   if (i.budgetMaxInr) {
     set("budget_max_inr", i.budgetMaxInr);
     set("budget_text", `up to ₹${(i.budgetMaxInr / 100000).toLocaleString("en-IN")} lakh`);

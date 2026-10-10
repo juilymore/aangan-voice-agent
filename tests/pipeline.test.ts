@@ -38,7 +38,7 @@ describe("full post-call analysis on 40 enquiries (mock AI)", () => {
     it(`${f.id} → ${f.expect.outcome}`, async () => {
       const e = byId.get(f.id)!;
       const llm = new MockLlmProvider();
-      llm.fallback = mockExtractionJson(f);
+      llm.fallback = mockExtractionJson(f, e.transcript);
       const a = await analyzeCall(
         {
           transcript: e.transcript,

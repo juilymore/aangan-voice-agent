@@ -7,7 +7,7 @@ import { config } from "dotenv";
 config({ path: ".env.local", quiet: true });
 
 const { readFileSync } = await import("node:fs");
-const { and, eq, like, inArray } = await import("drizzle-orm");
+const { and, eq, like, inArray, sql } = await import("drizzle-orm");
 const { db, schema } = await import("../lib/db");
 const { mockDeps } = await import("../lib/providers");
 const { MockLlmProvider } = await import("../lib/ai/types");
@@ -15,7 +15,7 @@ const { parseEnquiries } = await import("../lib/pipeline/enquiry-text");
 const { processCall } = await import("../lib/pipeline/process");
 const { computeSlots, blockMinutes } = await import("../lib/calendar/slots");
 const { FIXTURES } = await import("../tests/fixtures/sep2026");
-const { mockExtractionJson } = await import("../tests/fixtures/mock-extraction");
+const { mockExtractionJson, NAMES } = await import("../tests/fixtures/mock-extraction");
 
 const conn = db();
 
@@ -68,7 +68,7 @@ for (const f of FIXTURES) {
         endAt: slot.end,
         mode,
         googleEventId: `demo-event-${f.id}`,
-        callerName: null,
+        callerName: NAMES[f.id] ?? null,
         callbackNumber: number(i),
         locality: (f.input.locality as string | undefined) ?? null,
       });
@@ -96,7 +96,7 @@ for (const f of FIXTURES) {
   }
 
   const llm = new MockLlmProvider();
-  llm.fallback = mockExtractionJson(f);
+  llm.fallback = mockExtractionJson(f, e.transcript);
   await processCall(
     {
       providerCallId: vaaniCallId,
@@ -112,6 +112,13 @@ for (const f of FIXTURES) {
   );
   process.stdout.write(".");
 }
+
+// The demo calls happened in September, so give their designer emails a realistic "about a minute
+// after the call ended" timestamp instead of today's seeding time.
+await conn.execute(
+  sql`update calls set email_sent_at = ended_at + (interval '50 seconds' + random() * interval '60 seconds')
+      where vaani_call_id like 'demo-%' and email_sent_at is not null and ended_at is not null`,
+);
 
 // A little history so the funnel and audit trail have something to show.
 const byId = async (id: string) => (await conn.select().from(schema.calls).where(eq(schema.calls.vaaniCallId, `demo-${id}`)))[0];

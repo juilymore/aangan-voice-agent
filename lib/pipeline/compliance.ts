@@ -9,7 +9,7 @@ const AROUND_NUM = /\b(around|about|approx(?:imately)?|roughly)\s+(\d|one|two|th
 const COST_WORD = /\b(cost|costs|price|prices|pricing|rate|rates|budget|charge|charges|fee|fees|quote|amount)\b|कीमत|किंमत|खर्च/i;
 const NUMBER = /\d|\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|hundred|thousand)\b/i;
 const ASK_BUDGET = /\b(what('?s| is) your budget|budget in mind|how much (are you|do you) (plan|want|looking) to spend|budget range)\b/i;
-const BOOKED_CLAIM = /\b(you'?re booked|is booked|i'?ve booked|have booked|booking is confirmed|consultation is confirmed|confirmed (for|your))\b/i;
+const BOOKED_CLAIM = /\b(you'?re booked|you are booked|you'?re all set|you are all set|is booked|i'?ve booked|have booked|booking is confirmed|consultation is confirmed|confirmed (for|your))\b/i;
 const AI_STATEMENT = /\b(ai|artificial intelligence|virtual) assistant\b|\bi'?m an ai\b/i;
 const RECORDING = /\brecord(ed|ing)\b/i;
 

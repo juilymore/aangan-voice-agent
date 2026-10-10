@@ -117,7 +117,7 @@ describe("adversarial", () => {
       new MockLlmProvider(),
     );
     expect(a.evaluation.outcome).toBe("not_a_lead");
-    expect(a.followupReason).toMatch(/dropped/i);
+    expect(a.followupReason).toBe("incomplete");
   });
 });
 

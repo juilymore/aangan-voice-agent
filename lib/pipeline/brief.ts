@@ -125,7 +125,8 @@ export function buildSummary(x: ExtractedCall, e: Evaluation, booked: boolean): 
   const what = [sizeText(x), S(x, "property_kind") === "commercial" ? "office" : "home", S(x, "locality") ? `in ${S(x, "locality")}` : null]
     .filter(Boolean)
     .join(" ");
-  const scope = SCOPE_WORDS[S(x, "scope") ?? ""] ?? "interior work";
+  const scopeWords = SCOPE_WORDS[S(x, "scope") ?? ""];
+  const scope = scopeWords ? `a ${scopeWords}` : "interior work";
   const when = S(x, "timeline_text");
   const verdictLine: Record<Evaluation["outcome"], string> = {
     qualified: booked ? "A consultation was booked on the call." : "Qualified but not yet booked: a designer should call back.",
@@ -137,5 +138,5 @@ export function buildSummary(x: ExtractedCall, e: Evaluation, booked: boolean): 
     const details = S(x, "existing_client_details");
     return `${name} called${details ? ` about: ${details}` : ""}. ${verdictLine.not_a_lead}`;
   }
-  return `${name} wants a ${scope} for a ${what}.${when ? ` Timing: ${when}.` : ""} ${verdictLine[e.outcome]}`;
+  return `${name} wants ${scope} for a ${what}.${when ? ` Timing: ${when}.` : ""} ${verdictLine[e.outcome]}`;
 }

@@ -95,13 +95,13 @@ export async function analyzeCall(input: AnalyzeInput, llm: LlmProvider): Promis
 
 /** build_spec §8.10: prefers_human, incomplete, needs_review, qualified-not-booked, reschedule, conflict. */
 function followUpReason(e: Evaluation, flags: string[], booked: boolean, reschedule: boolean): string | null {
-  if (e.decidedBy === "existing_client_issue") return "Existing client issue: senior call-back";
-  if (e.decidedBy === "incomplete") return "Call dropped: call back";
-  if (reschedule || e.decidedBy === "reschedule_request") return "Reschedule request";
-  if (flags.includes("prefers_human")) return "Prefers a human: call back";
-  if (flags.includes("conflict")) return "Booking conflict: check before the meeting";
-  if (e.outcome === "needs_review") return "Needs review";
-  if (e.outcome === "qualified" && !booked) return "Qualified, not booked: call to schedule";
-  if (e.outcome === "not_qualified" && e.decidedBy === "timeline") return "Offered a later start: follow up";
+  if (e.decidedBy === "existing_client_issue") return "existing_client_issue";
+  if (e.decidedBy === "incomplete") return "incomplete";
+  if (reschedule || e.decidedBy === "reschedule_request") return "reschedule_request";
+  if (flags.includes("prefers_human")) return "prefers_human";
+  if (flags.includes("conflict")) return "conflict";
+  if (e.outcome === "needs_review") return "needs_review";
+  if (e.outcome === "qualified" && !booked) return "qualified_not_booked";
+  if (e.outcome === "not_qualified" && e.decidedBy === "timeline") return "later_start_offered";
   return null;
 }

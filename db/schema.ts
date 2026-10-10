@@ -1,5 +1,6 @@
 // Database schema — build_spec.md §5. Postgres on Neon, managed by drizzle-kit.
 import { sql } from "drizzle-orm";
+import type { ComplianceFlag, DesignerBrief, ExtractedCall, QualificationReasons } from "../lib/types/call-json";
 import {
   boolean,
   integer,
@@ -67,18 +68,18 @@ export const calls = pgTable(
     callType: callType("call_type"),
 
     transcript: jsonb("transcript").$type<TranscriptTurn[]>(),
-    extracted: jsonb("extracted"),
+    extracted: jsonb("extracted").$type<ExtractedCall>(),
     summary: text("summary"),
-    designerBrief: jsonb("designer_brief"),
+    designerBrief: jsonb("designer_brief").$type<DesignerBrief>(),
     followUpQuestions: jsonb("follow_up_questions").$type<string[]>(),
 
     qualification: qualification("qualification"),
-    qualificationReasons: jsonb("qualification_reasons"),
+    qualificationReasons: jsonb("qualification_reasons").$type<QualificationReasons>(),
     temperature: temperature("temperature"),
-    temperatureReasons: jsonb("temperature_reasons"),
+    temperatureReasons: jsonb("temperature_reasons").$type<string[]>(),
 
     flags: jsonb("flags").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
-    complianceFlags: jsonb("compliance_flags").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    complianceFlags: jsonb("compliance_flags").$type<ComplianceFlag[]>().notNull().default(sql`'[]'::jsonb`),
 
     assignedDesigner: text("assigned_designer").references(() => designers.key),
     needsFollowup: boolean("needs_followup").notNull().default(false),

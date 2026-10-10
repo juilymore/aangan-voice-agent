@@ -23,7 +23,8 @@ function rateLimited(key: string, perMinute = 120) {
 function authorized(req: Request) {
   const secret = env().TOOL_SHARED_SECRET;
   if (!secret) return false;
-  const given = req.headers.get("x-aangan-tool-secret") ?? req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  // Trim: a pasted secret often picks up a stray space or newline.
+  const given = (req.headers.get("x-aangan-tool-secret") ?? req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "").trim();
   const a = Buffer.from(given);
   const b = Buffer.from(secret);
   return a.length === b.length && timingSafeEqual(a, b);
@@ -77,7 +78,30 @@ export async function runTool<S extends z.ZodTypeAny>(
   fallback: object,
   handler: (params: z.infer<S>, ctx: { callId: string; body: unknown; raw: Obj }) => Promise<object>,
 ): Promise<Response> {
-  if (!authorized(req)) return Response.json({ error: "unauthorized" }, { status: 401 });
+  if (!authorized(req)) {
+    // Record the refusal (header names and lengths only, never values) so setup problems are visible.
+    const given = (req.headers.get("x-aangan-tool-secret") ?? "").trim();
+    try {
+      await db().insert(schema.toolCalls).values({
+        vaaniCallId: null,
+        tool,
+        request: {
+          auth: "refused",
+          secretHeaderPresent: req.headers.has("x-aangan-tool-secret"),
+          secretLength: given.length,
+          expectedLength: env().TOOL_SHARED_SECRET?.length ?? 0,
+          looksLikePlaceholder: /PASTE/i.test(given),
+          headerNames: [...req.headers.keys()].filter((k) => !k.startsWith("x-vercel")),
+        },
+        response: { error: "unauthorized" },
+        latencyMs: 0,
+        ok: false,
+      });
+    } catch {
+      /* logging must not break the response */
+    }
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
   if (rateLimited(`${tool}:${req.headers.get("x-forwarded-for") ?? "local"}`)) return Response.json({ ...fallback, error: "rate_limited" }, { status: 429 });
 
   const t0 = Date.now();

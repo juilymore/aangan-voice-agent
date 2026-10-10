@@ -95,3 +95,26 @@ describe("Vaani dashboard agent-webhook events", () => {
     expect(a.parseCallEvent({ event: "call_ringing", call_id: "abc" })).toBeNull();
   });
 });
+
+describe("Vaani dashboard webhook deliveries", () => {
+  const a = new VaaniAdapter("vaani_test_secret");
+  const body = JSON.stringify({ event: "call_post_processing", events: [
+    { event: "call_ended", data: { call_id: "r1", call_duration: 95 } },
+    { event: "call_post_processing", data: { call_id: "r1", call_duration: 95, transcript: "Agent: Hello\nUser: Hi" } },
+  ] });
+  it("verifies x-webhook-signature and gives a body-hash id", async () => {
+    const h = new Headers({ "x-webhook-signature": vaaniSignature(body, "vaani_test_secret"), "x-webhook-event": "call_post_processing" });
+    const r = await a.verifyWebhook(body, h);
+    expect(r.ok).toBe(true);
+    expect(r.eventId).toMatch(/^body-[0-9a-f]{32}$/);
+  });
+  it("picks the post-processing event out of a bundle", () => {
+    const c = a.parseCallEvent(JSON.parse(body));
+    expect(c?.providerCallId).toBe("r1");
+    expect(c?.durationSec).toBe(95);
+    expect(c?.transcript).toHaveLength(2);
+  });
+  it("treats connectivity tests as non-calls", () => {
+    expect(a.parseCallEvent({ event: "webhook_test", events: [{ event: "call_ended", data: { call_id: "t" } }] })).toBeNull();
+  });
+});

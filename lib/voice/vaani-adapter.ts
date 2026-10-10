@@ -8,11 +8,13 @@
 // NOT documented (TODO: confirm with a real call.completed payload):
 //   - fields inside `data` ("no sub-field is guaranteed"; phone numbers are masked)
 //   - any list-calls endpoint -> listRecentCalls returns "unsupported"
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { TranscriptTurn } from "@/db/schema";
 import type { CallStatus, NormalizedCall, VoiceProvider, WebhookCheck } from "./types";
 
-export const VAANI_SIGNATURE_HEADER = "x-vaanivoice-signature";
+export const VAANI_SIGNATURE_HEADER = "x-vaanivoice-signature"; // API webhooks (docs)
+// Dashboard "Agent Webhook" deliveries (observed 10 Oct 2026): x-webhook-signature: sha256=<hex>, x-webhook-event.
+export const VAANI_DASHBOARD_SIGNATURE_HEADER = "x-webhook-signature";
 
 export function vaaniSignature(rawBody: string, secret: string): string {
   return "sha256=" + createHmac("sha256", secret).update(rawBody, "utf8").digest("hex");
@@ -80,22 +82,36 @@ export class VaaniAdapter implements VoiceProvider {
 
   async verifyWebhook(rawBody: string, headers: Headers): Promise<WebhookCheck> {
     let eventId: string | null = null;
-    let eventType: string | null = headers.get("x-vaanivoice-event");
+    let eventType: string | null = headers.get("x-vaanivoice-event") ?? headers.get("x-webhook-event");
     try {
       const env = JSON.parse(rawBody);
       if (isObj(env)) {
         eventId = typeof env.id === "string" ? env.id : null;
-        eventType = typeof env.type === "string" ? env.type : eventType;
+        eventType = typeof env.type === "string" ? env.type : typeof env.event === "string" ? env.event : eventType;
       }
     } catch {
       /* invalid JSON: signature check below still decides ok */
     }
-    const ok = verifyVaaniSignature(rawBody, headers.get(VAANI_SIGNATURE_HEADER), this.webhookSecret ?? "");
+    const sig = headers.get(VAANI_SIGNATURE_HEADER) ?? headers.get(VAANI_DASHBOARD_SIGNATURE_HEADER);
+    const ok = verifyVaaniSignature(rawBody, sig, this.webhookSecret ?? "");
+    // Dashboard deliveries carry no event id: dedupe on a hash of the exact body instead.
+    eventId ??= `body-${createHash("sha256").update(rawBody).digest("hex").slice(0, 32)}`;
     return { ok, eventId, eventType };
   }
 
-  parseCallEvent(envelope: unknown): NormalizedCall | null {
-    if (!isObj(envelope)) return null;
+  parseCallEvent(input: unknown): NormalizedCall | null {
+    if (!isObj(input)) return null;
+    let envelope: Obj = input;
+    const top = String(input.type ?? input.event ?? "").toLowerCase();
+    if (top.includes("test") || top.includes("ping")) return null; // connectivity tests are not calls
+    // Dashboard deliveries may bundle several events: {event, events: [{event, data, timestamp}]}.
+    if (Array.isArray(input.events)) {
+      const evs = input.events.filter(isObj);
+      const name = (e: Obj) => String(e.event ?? e.type ?? "").toLowerCase().replace(/[^a-z]/g, "");
+      const best = evs.find((e) => name(e).includes("postprocess")) ?? evs.find((e) => name(e).includes("fail")) ?? evs.find((e) => name(e) === "callended");
+      if (!best) return null;
+      envelope = best;
+    }
     // API webhooks use call.completed / call.failed; dashboard agent webhooks use names like
     // "Call Post-Processing" / call_post_processing. Accept both; ignore progress events (ringing, started).
     const type = String(envelope.type ?? envelope.event ?? envelope.event_type ?? envelope.eventType ?? "");
@@ -111,7 +127,7 @@ export class VaaniAdapter implements VoiceProvider {
 
     const startedAt = toDate(pick(data, ["started_at", "startedAt", "start_time"]));
     const endedAt = toDate(pick(data, ["ended_at", "endedAt", "end_time"]));
-    const durRaw = pick(data, ["duration_sec", "duration_seconds", "duration"]);
+    const durRaw = pick(data, ["duration_sec", "duration_seconds", "call_duration", "duration"]);
     const durationSec =
       typeof durRaw === "number"
         ? Math.round(durRaw)

@@ -27,7 +27,8 @@ describe("Vaani webhook signature (docs: sha256=<hex HMAC-SHA256 of raw body>)",
     expect(sig).toMatch(/^sha256=[0-9a-f]{64}$/);
     expect(verifyVaaniSignature(body, sig, "vv_whk_test")).toBe(true);
     expect(verifyVaaniSignature(body + " ", sig, "vv_whk_test")).toBe(false);
-    expect(verifyVaaniSignature(body, sig.replace("sha256=", ""), "vv_whk_test")).toBe(false);
+    expect(verifyVaaniSignature(body, sig.replace("sha256=", ""), "vv_whk_test")).toBe(true); // bare hex is accepted too
+    expect(verifyVaaniSignature(body, "sha256=" + "0".repeat(64), "vv_whk_test")).toBe(false);
     expect(verifyVaaniSignature(body, null, "vv_whk_test")).toBe(false);
     expect(verifyVaaniSignature(body, sig, "")).toBe(false);
   });
@@ -124,5 +125,43 @@ describe("early Call Ended events", () => {
     const a = new VaaniAdapter("s");
     expect(a.parseCallEvent({ event: "call_ended", data: { call_id: "r2", call_duration: 80 } })).toBeNull();
     expect(a.parseCallEvent({ event: "call_ended", data: { call_id: "r2", transcript: "Agent: Hi\nUser: Hello" } })?.providerCallId).toBe("r2");
+  });
+});
+
+describe("real Vaani post-processing payload (10 Oct 2026 test call)", () => {
+  const a = new VaaniAdapter("vaani_test_secret");
+  const payload = {
+    event: "call_postprocessing",
+    to: "+918793763699",
+    from: "+911234567890",
+    call_id: "outbound-1",
+    data: {
+      call_id: "outbound-1",
+      call_type: "outbound",
+      phone_number: "+918793763699",
+      call_duration: 144.61,
+      call_started_at: "2026-10-10T11:01:21.121200+00:00",
+      call_ended_at: "2026-10-10T11:03:59.565750+00:00",
+      transcript: "[11:01:46] AGENT: Hello, thank you for calling Aangan Studio\n[11:02:05] USER: Hello? Yes.\n[11:02:25] AGENT: Is this for a home?\nwrapped text",
+    },
+  };
+  it("reads roles, offsets, times and number", () => {
+    const c = a.parseCallEvent(payload)!;
+    expect(c.providerCallId).toBe("outbound-1");
+    expect(c.transcript.map((t) => t.role)).toEqual(["agent", "caller", "agent"]);
+    expect(c.transcript[0].text).toBe("Hello, thank you for calling Aangan Studio");
+    expect(c.transcript[1].at_ms).toBe(19000);
+    expect(c.transcript[2].text).toBe("Is this for a home? wrapped text");
+    expect(c.durationSec).toBe(145);
+    expect(c.startedAt?.toISOString()).toBe("2026-10-10T11:01:21.121Z");
+    expect(c.callerNumber).toBe("+918793763699");
+  });
+  it("accepts signatures with or without the sha256= prefix", async () => {
+    const body = JSON.stringify(payload);
+    const sig = vaaniSignature(body, "vaani_test_secret");
+    for (const header of [sig, sig.replace("sha256=", ""), sig.toUpperCase()]) {
+      expect((await a.verifyWebhook(body, new Headers({ "x-webhook-signature": header }))).ok).toBe(true);
+    }
+    expect((await a.verifyWebhook(body, new Headers({ "x-webhook-signature": "deadbeef" }))).ok).toBe(false);
   });
 });

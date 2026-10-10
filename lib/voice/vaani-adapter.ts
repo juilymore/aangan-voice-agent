@@ -22,9 +22,12 @@ export function vaaniSignature(rawBody: string, secret: string): string {
 
 export function verifyVaaniSignature(rawBody: string, header: string | null, secret: string): boolean {
   if (!header || !secret) return false;
-  const expected = Buffer.from(vaaniSignature(rawBody, secret), "utf8");
-  const given = Buffer.from(header.trim(), "utf8");
-  return expected.length === given.length && timingSafeEqual(expected, given);
+  // Vaani sends "sha256=<hex>" on some events and a bare <hex> on others (observed 10 Oct 2026).
+  const given = header.trim().toLowerCase().replace(/^sha256=/, "");
+  const expected = vaaniSignature(rawBody, secret).slice("sha256=".length);
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(given, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 type Obj = Record<string, unknown>;
@@ -50,17 +53,28 @@ function toDate(v: unknown): Date | null {
 
 function toTranscript(v: unknown): TranscriptTurn[] {
   if (typeof v === "string") {
-    // "Agent: ...\nUser: ..." style
-    return v
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const m = line.match(/^(agent|assistant|bot|ai|caller|user|customer)\s*:\s*(.*)$/i);
-        if (!m) return { role: "caller" as const, text: line };
-        const role = /agent|assistant|bot|ai/i.test(m[1]) ? ("agent" as const) : ("caller" as const);
-        return { role, text: m[2] };
-      });
+    // Vaani: "[11:01:46] AGENT: ..." per line (clock time, role, text); also plain "Agent: ..." lines.
+    const turns: TranscriptTurn[] = [];
+    let t0: number | null = null;
+    for (const raw of v.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line) continue;
+      const m = line.match(/^(?:\[(\d{1,2}):(\d{2}):(\d{2})\]\s*)?(agent|assistant|bot|ai|caller|user|customer|human)\s*:\s*(.*)$/i);
+      if (!m) {
+        if (turns.length) turns[turns.length - 1].text += " " + line; // wrapped line
+        else turns.push({ role: "caller", text: line });
+        continue;
+      }
+      const role = /agent|assistant|bot|ai/i.test(m[4]) ? ("agent" as const) : ("caller" as const);
+      let at_ms: number | undefined;
+      if (m[1] !== undefined) {
+        const sec = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+        t0 ??= sec;
+        at_ms = Math.max(0, (sec - t0) * 1000);
+      }
+      turns.push({ role, text: m[5].trim(), at_ms });
+    }
+    return turns;
   }
   if (Array.isArray(v)) {
     return v.flatMap((t): TranscriptTurn[] => {
@@ -128,8 +142,8 @@ export class VaaniAdapter implements VoiceProvider {
     const id = pick(data, ["call_id", "callId", "session_id", "sessionId", "room_name", "roomName", "conversation_id", "id"]);
     if (typeof id !== "string" && typeof id !== "number") return null;
 
-    const startedAt = toDate(pick(data, ["started_at", "startedAt", "start_time"]));
-    const endedAt = toDate(pick(data, ["ended_at", "endedAt", "end_time"]));
+    const startedAt = toDate(pick(data, ["call_started_at", "picked_up_at", "started_at", "startedAt", "start_time", "call_dialing_at"]));
+    const endedAt = toDate(pick(data, ["call_ended_at", "ended_at", "endedAt", "end_time"]));
     const durRaw = pick(data, ["duration_sec", "duration_seconds", "call_duration", "duration"]);
     const durationSec =
       typeof durRaw === "number"
@@ -142,7 +156,11 @@ export class VaaniAdapter implements VoiceProvider {
     let status: CallStatus = isFailed ? "failed" : "completed";
     if (/drop|disconnect|hangup|abandon/.test(rawStatus)) status = "dropped";
 
-    const number = pick(data, ["caller_number", "from", "from_number", "phone", "phone_number", "customer_number", "user_number"]);
+    // The customer is the caller on inbound calls (from) and the callee on outbound calls (to).
+    const outbound = String(pick(data, ["call_type"]) ?? pick(envelope, ["call_type"]) ?? "").toLowerCase().includes("outbound");
+    const number =
+      pick(data, ["caller_number", "customer_number", "user_number", "phone_number", "phone"]) ??
+      pick(envelope, outbound ? ["to", "from"] : ["from", "to"]);
     const lang = pick(data, ["language", "lang", "locale"]);
 
     return {

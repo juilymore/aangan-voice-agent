@@ -111,7 +111,9 @@ export async function processCall(nc: NormalizedCall, opts: ProcessOptions = {})
     })
     .onConflictDoNothing({ target: schema.calls.vaaniCallId });
   const [call] = await conn.select().from(schema.calls).where(eq(schema.calls.vaaniCallId, nc.providerCallId));
-  if (call.qualification && !opts.force) return call; // already processed
+  // Already processed: skip, unless this delivery carries a fuller transcript (e.g. post-processing after an early event).
+  const richer = nc.transcript.length > (call.transcript?.length ?? 0);
+  if (call.qualification && !opts.force && !richer) return call;
 
   // 2. Booking made mid-call (tool) — by call id, else by callback number during the call window.
   let booking: typeof schema.bookings.$inferSelect | undefined;

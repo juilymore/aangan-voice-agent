@@ -120,7 +120,10 @@ export class VaaniAdapter implements VoiceProvider {
     const isDone = isFailed || t.includes("postprocess") || t.includes("completed") || t === "callended";
     if (type && !isDone) return null;
     const data = isObj(envelope.data) ? envelope.data : isObj(envelope.payload) ? envelope.payload : isObj(envelope.call) ? envelope.call : envelope;
-    if (!type && !pick(data, ["transcript", "turns", "messages", "conversation"])) return null;
+    const hasTranscript = !!pick(data, ["transcript", "turns", "messages", "conversation"]);
+    if (!type && !hasTranscript) return null;
+    // "Call Ended" arrives before the transcript is ready; wait for post-processing instead.
+    if (t === "callended" && !hasTranscript) return null;
 
     const id = pick(data, ["call_id", "callId", "session_id", "sessionId", "room_name", "roomName", "conversation_id", "id"]);
     if (typeof id !== "string" && typeof id !== "number") return null;

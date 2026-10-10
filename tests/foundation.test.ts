@@ -118,3 +118,11 @@ describe("Vaani dashboard webhook deliveries", () => {
     expect(a.parseCallEvent({ event: "webhook_test", events: [{ event: "call_ended", data: { call_id: "t" } }] })).toBeNull();
   });
 });
+
+describe("early Call Ended events", () => {
+  it("are ignored until the transcript exists", () => {
+    const a = new VaaniAdapter("s");
+    expect(a.parseCallEvent({ event: "call_ended", data: { call_id: "r2", call_duration: 80 } })).toBeNull();
+    expect(a.parseCallEvent({ event: "call_ended", data: { call_id: "r2", transcript: "Agent: Hi\nUser: Hello" } })?.providerCallId).toBe("r2");
+  });
+});

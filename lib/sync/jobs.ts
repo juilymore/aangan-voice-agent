@@ -138,6 +138,19 @@ async function runJob(kind: JobKind, callId: string, payload: Record<string, unk
   const e = env();
   const { call, booking } = await loadCall(callId);
 
+  // Demo/test calls never reach real services (real inboxes, the real CRM or calendar).
+  if (call.isTest) {
+    const providerFor: Record<JobKind, string> = {
+      designer_email: d.email.name,
+      escalation_email: d.email.name,
+      client_request_email: d.email.name,
+      price_leak_alert: d.email.name,
+      hubspot_sync: d.crm.name,
+      calendar_update: d.calendar.name,
+    };
+    if (providerFor[kind] !== "mock") return;
+  }
+
   if (kind === "designer_email") {
     if (call.emailSentAt) return; // exactly once
     if (call.qualification !== "qualified" || !call.designerBrief) return;

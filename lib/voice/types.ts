@@ -18,6 +18,8 @@ export type NormalizedCall = {
   callerNumber: string | null;
   status: CallStatus;
   language: string | null;
+  /** Reference to the call recording at the voice provider, if it sent one. */
+  recordingUrl?: string | null;
   transcript: TranscriptTurn[];
 };
 

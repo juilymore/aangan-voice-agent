@@ -33,6 +33,7 @@ import {
 import { EXTRACT_FIELDS, type ExtractField, type KeyFact } from "@/lib/types/call-json";
 import { CallTypeChip, ComplianceChip, DemoChip, FlagChip, OutcomeChip, ReasonChip, StatusDot, TemperatureChip } from "@/components/chips";
 import { EmptyState, Eyebrow, GlassCard, SectionTitle } from "@/components/ui";
+import { RecordingPlayer } from "@/components/recording-player";
 import {
   AlertIcon,
   ArrowLeftIcon,
@@ -386,6 +387,15 @@ export default async function CallDetailPage({ params }: PageProps<"/calls/[id]"
           {/* Transcript */}
           <GlassCard className="p-5 sm:p-6">
             <SectionTitle eyebrow="What was said" title="Transcript" />
+            {call.recordingUrl ? (
+              <div className="mb-5">
+                <RecordingPlayer callId={call.id} durationSec={call.durationSec} />
+              </div>
+            ) : (
+              <p className="mb-4 text-xs text-mute">
+                {call.isTest ? "Demo call: there is no audio recording." : "No audio recording was sent for this call."}
+              </p>
+            )}
             {transcript.length === 0 ? (
               <EmptyState icon={MessageIcon} title="No transcript">
                 The transcript has not arrived for this call yet.

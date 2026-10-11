@@ -106,6 +106,7 @@ export async function processCall(nc: NormalizedCall, opts: ProcessOptions = {})
       durationSec: nc.durationSec,
       callerNumber: nc.callerNumber,
       language: nc.language,
+      recordingUrl: nc.recordingUrl ?? null,
       transcript: nc.transcript,
       isTest: opts.isTest ?? false,
     })
@@ -212,6 +213,7 @@ export async function processCall(nc: NormalizedCall, opts: ProcessOptions = {})
       callerName: a.callerName ?? call.callerName,
       language: a.language ?? nc.language ?? call.language,
       callType: a.callType as typeof schema.calls.$inferInsert.callType,
+      recordingUrl: nc.recordingUrl ?? call.recordingUrl,
       transcript: nc.transcript,
       extracted: a.extracted,
       summary: a.summary,

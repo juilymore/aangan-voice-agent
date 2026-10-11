@@ -42,6 +42,11 @@ function pick(o: Obj, keys: string[]): unknown {
   return undefined;
 }
 
+function pickString(o: Obj, keys: string[]): string | null {
+  const v = pick(o, keys);
+  return typeof v === "string" && /^https?:\/\//i.test(v) ? v : null;
+}
+
 function toDate(v: unknown): Date | null {
   if (typeof v === "number") return new Date(v < 1e12 ? v * 1000 : v);
   if (typeof v === "string") {
@@ -171,6 +176,7 @@ export class VaaniAdapter implements VoiceProvider {
       callerNumber: typeof number === "string" ? number : null,
       status,
       language: typeof lang === "string" ? lang : null,
+      recordingUrl: pickString(data, ["recording_url", "recordingUrl", "recording"]),
       transcript: toTranscript(pick(data, ["transcript", "turns", "messages", "conversation"])),
     };
   }

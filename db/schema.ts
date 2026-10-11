@@ -65,6 +65,9 @@ export const calls = pgTable(
     callerNumber: text("caller_number"),
     callerName: text("caller_name"),
     language: text("language"),
+    // Vaani recording reference (set only when Vaani sent one). The audio itself is streamed on demand
+    // through /api/recordings/<call id>, never copied or exposed with a key.
+    recordingUrl: text("recording_url"),
 
     callType: callType("call_type"),
 

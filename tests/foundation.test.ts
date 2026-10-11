@@ -165,3 +165,16 @@ describe("real Vaani post-processing payload (10 Oct 2026 test call)", () => {
     expect((await a.verifyWebhook(body, new Headers({ "x-webhook-signature": "deadbeef" }))).ok).toBe(false);
   });
 });
+
+describe("call recordings", () => {
+  const a = new VaaniAdapter("s");
+  const base = { event: "call_postprocessing", data: { call_id: "r9", transcript: "[10:00:00] AGENT: Hi\n[10:00:05] USER: Hello" } };
+  it("reads the recording link when Vaani sends one", () => {
+    const c = a.parseCallEvent({ ...base, data: { ...base.data, recording_url: "https://app.vaanivoice.ai/api/stream/r9?x=1" } });
+    expect(c?.recordingUrl).toBe("https://app.vaanivoice.ai/api/stream/r9?x=1");
+  });
+  it("has no recording for chat sessions or non-URL values", () => {
+    expect(a.parseCallEvent(base)?.recordingUrl).toBeNull();
+    expect(a.parseCallEvent({ ...base, data: { ...base.data, recording_url: "none" } })?.recordingUrl).toBeNull();
+  });
+});

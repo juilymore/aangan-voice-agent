@@ -49,16 +49,35 @@ export function designerEmail(args: {
   brief: DesignerBrief;
   shortWhat: string; // e.g. "3BHK Kothrud"
   dashboardUrl: string;
+  summary?: string | null;
+  callerNumber?: string | null;
+  callerEmail?: string | null;
 }): Rendered {
   const { brief } = args;
   const name = args.callerName ?? "New caller";
   const temp = args.temperature ? `[${args.temperature.toUpperCase()}] ` : "";
   const meeting = brief.meeting
-    ? `consultation ${fmtMeeting(brief.meeting.startAt)} (${brief.meeting.mode === "site_visit" ? "site visit" : "phone call"})`
+    ? `consultation ${fmtMeeting(brief.meeting.startAt)} (phone call)`
     : "not booked, call to schedule";
   const subject = `${temp}${name}, ${args.shortWhat} — ${meeting}`;
 
+  const chip = (text: string, bg: string, fg: string) =>
+    `<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 10px;background:${bg};color:${fg};font-size:11px;letter-spacing:1.5px;text-transform:uppercase">${esc(text)}</span>`;
+  const hot = args.temperature === "hot";
+  const status = [
+    chip("Qualified", "#e6f2ea", "#166534"),
+    args.temperature ? chip(args.temperature, hot ? "#fde8e1" : "#f3eee6", hot ? "#9a3412" : "#57534e") : "",
+    brief.meeting ? chip(`Booked · ${fmtMeeting(brief.meeting.startAt)}`, "#e8edf6", "#1e3a8a") : chip("Not booked · call to schedule", "#fdf1ec", "#9a3412"),
+  ].join("");
+  const contact = [
+    args.callerNumber ? `Phone: ${args.callerNumber}` : null,
+    args.callerEmail ? `Email: ${args.callerEmail}` : null,
+  ].filter((x): x is string => !!x);
+
   const body = [
+    `<div style="margin:0 0 14px">${status}</div>`,
+    args.summary ? `<p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#44403c">${esc(args.summary)}</p>` : "",
+    contact.length ? section("Contact", list(contact)) : "",
     brief.warning ? `<p style="margin:0 0 14px;padding:10px 12px;background:#fdf1ec;border-left:3px solid #b45f3c;font-size:14px">${esc(brief.warning)}</p>` : "",
     `<p style="margin:0;font-size:16px;line-height:1.5">${esc(brief.oneLiner)}</p>`,
     section("Key facts", list(brief.keyFacts.map((f) => `${f.label}: ${f.value}`))),
@@ -71,13 +90,16 @@ export function designerEmail(args: {
     section("Ask on your first call", list(brief.followUpQuestions)),
     section("Flags", list(brief.flags)),
     section("Suggested opening line", `<p style="margin:0;font-size:14px;font-style:italic">“${esc(brief.suggestedOpeningLine)}”</p>`),
-    section("Meeting", `<p style="margin:0;font-size:14px">${esc(brief.meeting ? `${fmtMeeting(brief.meeting.startAt)} · ${brief.meeting.designerName} · ${brief.meeting.mode === "site_visit" ? "Site visit" : "Phone call"}` : "Not booked yet: please call to schedule.")}</p>`),
-    `<p style="margin:22px 0 0;font-size:12px;color:#8a8580">The full transcript is on the dashboard.</p>`,
+    section("Meeting", `<p style="margin:0;font-size:14px">${esc(brief.meeting ? `${fmtMeeting(brief.meeting.startAt)} · ${brief.meeting.designerName} · Phone call` : "Not booked yet: please call to schedule.")}</p>`),
+    `<p style="margin:22px 0 0;font-size:12px;color:#8a8580">The full transcript and call recording are on the dashboard.</p>`,
   ].join("");
 
   const text = [
     subject,
     "",
+    `Status: Qualified${args.temperature ? " · " + args.temperature.toUpperCase() : ""} · ${brief.meeting ? "Booked " + fmtMeeting(brief.meeting.startAt) : "Not booked"}`,
+    args.summary ?? "",
+    ...contact,
     brief.warning ?? "",
     brief.oneLiner,
     "",
@@ -87,10 +109,10 @@ export function designerEmail(args: {
     "Ask on your first call:",
     ...brief.followUpQuestions.map((q) => `- ${q}`),
     "",
-    `Open in dashboard: ${args.dashboardUrl}`,
+    `View full details on dashboard: ${args.dashboardUrl}`,
   ].join("\n");
 
-  return { subject, html: shell("New qualified lead", name, body, { href: args.dashboardUrl, label: "Open in dashboard" }), text };
+  return { subject, html: shell("New qualified lead", name, body, { href: args.dashboardUrl, label: "View full details on dashboard" }), text };
 }
 
 export function escalationEmail(args: {

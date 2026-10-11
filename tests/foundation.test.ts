@@ -121,10 +121,12 @@ describe("Vaani dashboard webhook deliveries", () => {
 });
 
 describe("early Call Ended events", () => {
-  it("are ignored until the transcript exists", () => {
+  it("are always ignored: post-processing carries the full data", () => {
     const a = new VaaniAdapter("s");
     expect(a.parseCallEvent({ event: "call_ended", data: { call_id: "r2", call_duration: 80 } })).toBeNull();
-    expect(a.parseCallEvent({ event: "call_ended", data: { call_id: "r2", transcript: "Agent: Hi\nUser: Hello" } })?.providerCallId).toBe("r2");
+    const tx = "Agent: Hi\nUser: Hello";
+    expect(a.parseCallEvent({ event: "call_ended", data: { call_id: "r2", transcript: tx } })).toBeNull();
+    expect(a.parseCallEvent({ event: "call_postprocessing", data: { call_id: "r2", transcript: tx } })?.providerCallId).toBe("r2");
   });
 });
 

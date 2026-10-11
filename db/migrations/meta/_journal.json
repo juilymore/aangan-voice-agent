@@ -29,6 +29,13 @@
       "when": 1791719239716,
       "tag": "0003_call_recording_url",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791721930568,
+      "tag": "0004_booking_caller_email",
+      "breakpoints": true
     }
   ]
 }

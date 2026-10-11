@@ -98,7 +98,7 @@ export function computeSlots(args: {
         start,
         end,
         mode,
-        spoken: `${d.name}, ${spokenTime(start, now)}`,
+        spoken: spokenTime(start, now), // no designer name: callers don't choose; the agent names the designer after booking
       });
       usedPerDay.set(key, (usedPerDay.get(key) ?? 0) + 1);
       if (out.length >= limit) break;

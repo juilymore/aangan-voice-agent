@@ -159,12 +159,20 @@ async function runJob(kind: JobKind, callId: string, payload: Record<string, unk
       : [];
     const to = designer?.email ?? e.EMAIL_TEST_TO ?? e.OWNER_EMAIL;
     if (!to) throw new Error("no designer email configured");
+    const [booking] = await db()
+      .select({ callerEmail: schema.bookings.callerEmail })
+      .from(schema.bookings)
+      .where(and(eq(schema.bookings.vaaniCallId, call.vaaniCallId), eq(schema.bookings.status, "confirmed")))
+      .limit(1);
     const m = designerEmail({
       callerName: call.callerName,
       temperature: call.temperature,
       brief: call.designerBrief,
       shortWhat: shortWhat(call),
       dashboardUrl: dashboardUrl(callId),
+      summary: call.summary,
+      callerNumber: call.callerNumber,
+      callerEmail: booking?.callerEmail ?? null,
     });
     await d.email.send({ to, ...m, idempotencyKey: key });
     await setCall(callId, { emailStatus: d.email.name === "mock" ? "sent (mock)" : "sent", emailSentAt: new Date() });

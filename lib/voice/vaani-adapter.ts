@@ -127,7 +127,7 @@ export class VaaniAdapter implements VoiceProvider {
     if (Array.isArray(input.events)) {
       const evs = input.events.filter(isObj);
       const name = (e: Obj) => String(e.event ?? e.type ?? "").toLowerCase().replace(/[^a-z]/g, "");
-      const best = evs.find((e) => name(e).includes("postprocess")) ?? evs.find((e) => name(e).includes("fail")) ?? evs.find((e) => name(e) === "callended");
+      const best = evs.find((e) => name(e).includes("postprocess")) ?? evs.find((e) => name(e).includes("fail"));
       if (!best) return null;
       envelope = best;
     }
@@ -141,8 +141,8 @@ export class VaaniAdapter implements VoiceProvider {
     const data = isObj(envelope.data) ? envelope.data : isObj(envelope.payload) ? envelope.payload : isObj(envelope.call) ? envelope.call : envelope;
     const hasTranscript = !!pick(data, ["transcript", "turns", "messages", "conversation"]);
     if (!type && !hasTranscript) return null;
-    // "Call Ended" arrives before the transcript is ready; wait for post-processing instead.
-    if (t === "callended" && !hasTranscript) return null;
+    // "Call Ended" arrives before the transcript, times and recording are ready: wait for post-processing.
+    if (t === "callended") return null;
 
     const id = pick(data, ["call_id", "callId", "session_id", "sessionId", "room_name", "roomName", "conversation_id", "id"]);
     if (typeof id !== "string" && typeof id !== "number") return null;

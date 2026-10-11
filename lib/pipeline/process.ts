@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { deps as realDeps, type Deps } from "@/lib/providers";
 import { enqueue, runDueJobs } from "@/lib/sync/jobs";
@@ -113,7 +113,10 @@ export async function processCall(nc: NormalizedCall, opts: ProcessOptions = {})
     .onConflictDoNothing({ target: schema.calls.vaaniCallId });
   const [call] = await conn.select().from(schema.calls).where(eq(schema.calls.vaaniCallId, nc.providerCallId));
   // Already processed: skip, unless this delivery carries a fuller transcript (e.g. post-processing after an early event).
-  const richer = nc.transcript.length > (call.transcript?.length ?? 0);
+  const richer =
+    nc.transcript.length > (call.transcript?.length ?? 0) ||
+    (!!nc.recordingUrl && !call.recordingUrl) ||
+    (!!nc.startedAt && !call.startedAt);
   if (call.qualification && !opts.force && !richer) return call;
 
   // 2. Booking made mid-call (tool) — by call id, else by callback number during the call window.
@@ -124,14 +127,19 @@ export async function processCall(nc: NormalizedCall, opts: ProcessOptions = {})
     .where(and(eq(schema.bookings.vaaniCallId, nc.providerCallId), eq(schema.bookings.status, "confirmed")))
     .limit(1);
   if (!booking && nc.startedAt) {
+    // Vaani tool requests carry no call id, so a mid-call booking is stored under "unknown-<minute>":
+    // match it by time window (and phone number when it agrees), nearest to the call's end first.
+    const windowStart = new Date(nc.startedAt.getTime() - 60_000);
     const windowEnd = new Date((nc.endedAt ?? nc.startedAt).getTime() + 10 * 60_000);
     const candidates = await conn
       .select()
       .from(schema.bookings)
-      .where(and(eq(schema.bookings.status, "confirmed"), gte(schema.bookings.createdAt, nc.startedAt), lte(schema.bookings.createdAt, windowEnd)));
+      .where(and(eq(schema.bookings.status, "confirmed"), gte(schema.bookings.createdAt, windowStart), lte(schema.bookings.createdAt, windowEnd)));
+    const unlinked = candidates.filter((b) => b.vaaniCallId.startsWith("unknown"));
+    const endMs = (nc.endedAt ?? nc.startedAt).getTime();
+    unlinked.sort((a, b) => Math.abs(a.createdAt.getTime() - endMs) - Math.abs(b.createdAt.getTime() - endMs));
     booking =
-      candidates.find((b) => last10(b.callbackNumber) && last10(b.callbackNumber) === last10(nc.callerNumber)) ??
-      (candidates.length === 1 && candidates[0].vaaniCallId.startsWith("unknown") ? candidates[0] : undefined);
+      candidates.find((b) => last10(b.callbackNumber) && last10(b.callbackNumber) === last10(nc.callerNumber)) ?? unlinked[0];
     if (booking) await conn.update(schema.bookings).set({ vaaniCallId: nc.providerCallId }).where(eq(schema.bookings.id, booking.id));
   }
 
@@ -169,7 +177,22 @@ export async function processCall(nc: NormalizedCall, opts: ProcessOptions = {})
   const toolBooked = await conn
     .select({ id: schema.toolCalls.id })
     .from(schema.toolCalls)
-    .where(and(eq(schema.toolCalls.vaaniCallId, nc.providerCallId), eq(schema.toolCalls.tool, "book_consultation"), eq(schema.toolCalls.ok, true)))
+    .where(
+      and(
+        eq(schema.toolCalls.tool, "book_consultation"),
+        eq(schema.toolCalls.ok, true),
+        nc.startedAt
+          ? or(
+              eq(schema.toolCalls.vaaniCallId, nc.providerCallId),
+              and(
+                sql`${schema.toolCalls.vaaniCallId} like 'unknown%'`,
+                gte(schema.toolCalls.at, new Date(nc.startedAt.getTime() - 60_000)),
+                lte(schema.toolCalls.at, new Date((nc.endedAt ?? nc.startedAt).getTime() + 10 * 60_000)),
+              ),
+            )
+          : eq(schema.toolCalls.vaaniCallId, nc.providerCallId),
+      ),
+    )
     .limit(1);
   const a = await analyzeCall(
     {
@@ -189,7 +212,7 @@ export async function processCall(nc: NormalizedCall, opts: ProcessOptions = {})
   );
 
   // 9. Assign: booked designer; otherwise the active designer with fewer open qualified leads (random on a tie).
-  let assigned = booking?.designer ?? call.assignedDesigner ?? null;
+  let assigned: string | null = booking?.designer ?? call.assignedDesigner ?? null;
   // Existing clients: route to the designer they named, if we recognise the name.
   if (!assigned && (a.callType === "followup_update" || a.callType === "existing_client_issue")) {
     const said = String(a.extracted.fields.existing_client_details?.value ?? "").toLowerCase();
@@ -214,6 +237,10 @@ export async function processCall(nc: NormalizedCall, opts: ProcessOptions = {})
       language: a.language ?? nc.language ?? call.language,
       callType: a.callType as typeof schema.calls.$inferInsert.callType,
       recordingUrl: nc.recordingUrl ?? call.recordingUrl,
+      startedAt: nc.startedAt ?? call.startedAt,
+      endedAt: nc.endedAt ?? call.endedAt,
+      durationSec: nc.durationSec ?? call.durationSec,
+      callerNumber: nc.callerNumber ?? call.callerNumber,
       transcript: nc.transcript,
       extracted: a.extracted,
       summary: a.summary,

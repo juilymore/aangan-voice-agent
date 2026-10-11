@@ -1,5 +1,6 @@
 import "server-only";
 import { timingSafeEqual } from "node:crypto";
+import { after } from "next/server";
 import type { z } from "zod";
 import { db, schema } from "@/lib/db";
 import { env } from "@/lib/env";
@@ -134,10 +135,23 @@ export async function runTool<S extends z.ZodTypeAny>(
   }
 
   const latencyMs = Date.now() - t0;
+  // Header names only (plus values of id-like headers) so we can discover whether Vaani sends a call id.
+  const meta = {
+    headerNames: [...req.headers.keys()].filter((k) => !k.startsWith("x-vercel") && !/secret|authorization|cookie/.test(k)),
+    ids: Object.fromEntries([...req.headers.entries()].filter(([k]) => /(call|session|room|conversation).*id|^x-vaani/.test(k)).slice(0, 6)),
+  };
+  const log = async () => {
+    try {
+      await db().insert(schema.toolCalls).values({ vaaniCallId: callId, tool, request: { ...raw, _meta: meta }, response, latencyMs, ok });
+    } catch (e) {
+      console.error("tool_calls log failed:", e instanceof Error ? e.message : e);
+    }
+  };
+  // Log after the response is sent so the caller is not kept waiting on a second database round trip.
   try {
-    await db().insert(schema.toolCalls).values({ vaaniCallId: callId, tool, request: raw, response, latencyMs, ok });
-  } catch (e) {
-    console.error("tool_calls log failed:", e instanceof Error ? e.message : e);
+    after(log);
+  } catch {
+    await log(); // outside a request (unit tests)
   }
   return Response.json(response, { headers: { "x-latency-ms": String(latencyMs) } });
 }

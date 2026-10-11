@@ -129,6 +129,7 @@ export const bookings = pgTable(
     status: bookingStatus("status").notNull().default("confirmed"),
     callerName: text("caller_name"),
     callbackNumber: text("callback_number"),
+    callerEmail: text("caller_email"),
     locality: text("locality"),
     society: text("society"),
     createdAt: ts("created_at").notNull().defaultNow(),
